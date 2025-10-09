@@ -1,0 +1,30 @@
+// backend/data/mockAadhaarDB.js
+export const mockAadhaarDB = [
+    { aadhaar: "123412341234", realName: "Ravi Kumar", phone: "9876543210", address: "Bangalore, Karnataka" },
+    { aadhaar: "567856785678", realName: "Priya Sharma", phone: "9123456789", address: "Hyderabad, Telangana" },
+    { aadhaar: "987698769876", realName: "Anil Mehta", phone: "9988776655", address: "Chennai, Tamil Nadu" },
+    { aadhaar: "111122223333", realName: "Sneha Reddy", phone: "9012345678", address: "Pune, Maharashtra" },
+    { aadhaar: "444455556666", realName: "Arjun Patel", phone: "9823456789", address: "Ahmedabad, Gujarat" },
+    { aadhaar: "777788889999", realName: "Divya Nair", phone: "9638527410", address: "Kochi, Kerala" },
+    { aadhaar: "222233334444", realName: "Vikram Singh", phone: "9541236789", address: "Lucknow, Uttar Pradesh" },
+    { aadhaar: "555566667777", realName: "Kavya Joshi", phone: "9876501234", address: "Jaipur, Rajasthan" },
+    { aadhaar: "888899990000", realName: "Manoj Verma", phone: "9658741230", address: "Bhopal, Madhya Pradesh" },
+    { aadhaar: "333344445555", realName: "Neha Gupta", phone: "9865321470", address: "Patna, Bihar" },
+    { aadhaar: "666677778888", realName: "Rahul Desai", phone: "9123987654", address: "Surat, Gujarat" },
+    { aadhaar: "999900001111", realName: "Shweta Iyer", phone: "9345126780", address: "Mysore, Karnataka" },
+    { aadhaar: "121212121212", realName: "Naveen Kumar", phone: "9812345670", address: "Delhi, Delhi" },
+    { aadhaar: "343434343434", realName: "Pooja Chawla", phone: "9723412567", address: "Indore, Madhya Pradesh" },
+    { aadhaar: "565656565656", realName: "Ajay Rathore", phone: "9567890321", address: "Nagpur, Maharashtra" },
+    { aadhaar: "787878787878", realName: "Meera Das", phone: "9832145678", address: "Kolkata, West Bengal" },
+    { aadhaar: "909090909090", realName: "Kiran Raj", phone: "9765432109", address: "Thiruvananthapuram, Kerala" },
+    { aadhaar: "135713571357", realName: "Sunita Mishra", phone: "9123004567", address: "Varanasi, Uttar Pradesh" },
+    { aadhaar: "246824682468", realName: "Rohit Kapoor", phone: "9988001122", address: "Chandigarh, Punjab" },
+    { aadhaar: "369036903690", realName: "Lakshmi Menon", phone: "9877003344", address: "Coimbatore, Tamil Nadu" },
+    { aadhaar: "147852369147", realName: "Gaurav Bansal", phone: "9123998877", address: "Noida, Uttar Pradesh" },
+    { aadhaar: "258963147258", realName: "Aishwarya Rao", phone: "9654321870", address: "Visakhapatnam, Andhra Pradesh" },
+    { aadhaar: "369258147369", realName: "Suresh Raina", phone: "9898123456", address: "Kanpur, Uttar Pradesh" },
+    { aadhaar: "741852963741", realName: "Ananya Sen", phone: "9345012890", address: "Guwahati, Assam" },
+    { aadhaar: "852963741852", realName: "Harish Kumar", phone: "9123409876", address: "Ranchi, Jharkhand" },
+    { aadhaar: "852563741852", realName: " Kumar", phone: "9123409877", address: "padvarahhli mysuru" }
+  ];
+  
