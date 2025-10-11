@@ -83,5 +83,30 @@ If you see a CORS error, ensure `WEB_ORIGIN` is set to the exact Vite URL and re
 - CORS blocked: confirm `WEB_ORIGIN` and that you restarted the backend after changes.
 - Mongo connection error: verify `MONGO_URI` and network access to your cluster.
 
+## StudentHomePostsAgent (LLM prompt)
+The exact system prompt for the Student Home Posts agent lives at:
+
+- `frontend/il/src/ai/studentHomePostsAgent.js`
+
+Exports:
+- `STUDENT_HOME_POSTS_SYSTEM_PROMPT`: copy-ready system prompt string
+- `buildAgentInput(payload)`: helper to build/clean the agent input JSON
+- `safeParseAgentJson(json)`: safe JSON parsing for agent responses
+- `toChatMessages(input)`: convenience to build messages for chat LLMs
+
+Example usage (pseudo-code):
+
+```js
+import { STUDENT_HOME_POSTS_SYSTEM_PROMPT, buildAgentInput, safeParseAgentJson } from "./src/ai/studentHomePostsAgent";
+
+const input = buildAgentInput({ event: "createPost", owner: { id: "u1", schoolId: "s1", profileVisibility: "school" }, post: { media: [{ kind: "image", url: "https://..." }], caption: "Great work! #art" } });
+const messages = [
+  { role: "system", content: STUDENT_HOME_POSTS_SYSTEM_PROMPT },
+  { role: "user", content: JSON.stringify(input) }
+];
+// const llmResult = await callYourLLM(messages);
+// const data = safeParseAgentJson(llmResult.content);
+```
+
 ## License
 This repository currently has no explicit license. Add one if you plan to share or open-source the project.
