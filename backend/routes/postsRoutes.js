@@ -29,6 +29,10 @@ router.post("/upload", requireStudent, upload.single("file"), async (req, res) =
   try {
     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
+    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+      return res.status(500).json({ message: "Cloudinary not configured on server (missing env vars)" });
+    }
+
     const mime = req.file.mimetype || "";
     const isVideo = mime.startsWith("video/");
     const resourceType = isVideo ? "video" : "image";
@@ -39,6 +43,7 @@ router.post("/upload", requireStudent, upload.single("file"), async (req, res) =
       { folder, resource_type: "auto", eager: isVideo ? [{ format: "mp4" }] : undefined },
       (err, result) => {
         if (err) {
+          console.error("Cloudinary upload error:", err);
           return res.status(500).json({ message: "Upload failed", error: err.message });
         }
         // Determine kind from resource_type or mime
@@ -59,6 +64,7 @@ router.post("/upload", requireStudent, upload.single("file"), async (req, res) =
 
     streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
   } catch (e) {
+    console.error("/api/posts/upload failed:", e);
     res.status(500).json({ message: "Failed to upload", error: e.message });
   }
 });
