@@ -101,6 +101,50 @@ export default function ServerDashboard() {
     if (schoolId) fetchAdmins(schoolId);
   }
 
+  async function deleteSchool(schoolId) {
+    setMsg("");
+    const proceed = confirm("Delete this school? We will first check for linked records.");
+    if (!proceed) return;
+    try {
+      // First try a safe delete (no cascade) to detect links
+      let r = await fetch(`${API}/server/schools/${schoolId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (r.ok) {
+        setMsg("School deleted");
+        await load();
+        return;
+      }
+      let data = {};
+      try { data = await r.json(); } catch {}
+      if (r.status === 409) {
+        const counts = data?.counts || {};
+        const detail = `Students: ${counts.students || 0}, Teachers: ${counts.teachers || 0}, Admins: ${counts.admins || 0}`;
+        const force = confirm(
+          `This school has linked records.\n${detail}\n\nProceed with cascade delete? This will permanently remove these records.`
+        );
+        if (!force) return;
+        // Force cascade delete
+        r = await fetch(`${API}/server/schools/${schoolId}?force=true`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const d2 = await r.json().catch(() => ({}));
+        if (r.ok) {
+          setMsg("School and linked records deleted");
+          await load();
+        } else {
+          setMsg(d2?.message || "Delete failed");
+        }
+        return;
+      }
+      setMsg(data?.message || "Delete failed");
+    } catch (e) {
+      setMsg("Delete failed");
+    }
+  }
+
   return (
     <div className="min-h-screen scenic-bg text-white p-6">
       <div className="flex items-center justify-between mb-6">
@@ -139,6 +183,7 @@ export default function ServerDashboard() {
               <div className="flex gap-2">
                 <button onClick={() => provisionAdmin(s._id)} className="btn-secondary px-3 py-2 rounded">Provision Admin</button>
                 <button onClick={() => toggleAdmins(s._id)} className="px-3 py-2 rounded bg-white/20 hover:bg-white/30">{openSchool === s._id ? "Hide Admins" : "View Admins"}</button>
+                <button onClick={() => deleteSchool(s._id)} className="px-3 py-2 rounded bg-rose-600 hover:bg-rose-500 text-white">Delete</button>
               </div>
             </div>
 
