@@ -18,9 +18,11 @@ import studentProfileRoutes from "./routes/studentProfileRoutes.js";
 import studentNetworkRoutes from "./routes/portal/studentNetworkRoutes.js";
 import mentorAuthRoutes from "./routes/mentorAuthRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
+import postsRoutes from "./routes/postsRoutes.js";
 import Admin from "./models/Admin.js";
 import bcrypt from "bcryptjs";
 import School from "./models/School.js";
+import cloudinary from "./utils/cloudinary.js";
 
 
 
@@ -69,6 +71,7 @@ app.use("/api/students", studentProfileRoutes);
 app.use("/api/student", studentNetworkRoutes);
 app.use("/api/mentor", mentorAuthRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/posts", postsRoutes);
 app.use("/api/identity", identityRoutes);
 app.use("/api/contact", contactRoutes);
 app.use("/api/school", schoolRoutes);
@@ -87,6 +90,12 @@ app.get("/api/health", (req, res) => res.json({ ok: true }));
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     console.log("MongoDB connected");
+    try {
+      const c = cloudinary.config();
+      console.log(`Cloudinary config: ${c?.cloud_name ? 'present' : 'missing'}`);
+    } catch (_) {
+      console.log('Cloudinary config: missing');
+    }
     // Dev seed schools if none
     (async () => {
       try {

@@ -29,7 +29,8 @@ router.post("/upload", requireStudent, upload.single("file"), async (req, res) =
   try {
     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
-    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+    const cfg = cloudinary.config();
+    if (!cfg?.cloud_name || !cfg?.api_key || !cfg?.api_secret) {
       return res.status(500).json({ message: "Cloudinary not configured on server (missing env vars)" });
     }
 
