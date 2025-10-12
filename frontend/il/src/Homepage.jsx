@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import PostComposer from "./components/PostComposer.jsx";
 
 const API = axios.create({
   baseURL: import.meta.env?.VITE_API_BASE_URL || "http://localhost:5000/api",
@@ -433,10 +434,6 @@ const HomePage = () => {
   }, [chatOpen, chatConv?._id]);
 
   // ==================== Posts (Create + Feed) ====================
-  const [postCaption, setPostCaption] = useState("");
-  const [postMediaUrl, setPostMediaUrl] = useState("");
-  const [postVisibility, setPostVisibility] = useState("school"); // "public" | "school"
-  const [posting, setPosting] = useState(false);
   const [feed, setFeed] = useState([]);
   const [loadingFeed, setLoadingFeed] = useState(false);
 
@@ -459,30 +456,7 @@ const HomePage = () => {
     loadFeed("school");
   }, []);
 
-  async function createPost(e) {
-    e?.preventDefault?.();
-    const url = postMediaUrl.trim();
-    const caption = postCaption.trim();
-    if (!url) return alert("Provide an image/video URL");
-    try {
-      setPosting(true);
-      const token = localStorage.getItem("token");
-      if (!token) return alert("Login required");
-      const media = [{ kind: url.match(/\.(mp4|webm|ogg)(\?|$)/i) ? "video" : "image", url }];
-      const hashtags = (caption.match(/#\w+/g) || []).map(h => h.toLowerCase());
-      const r = await API.post(`/posts`, { media, caption, hashtags, visibility: postVisibility }, { headers: { Authorization: `Bearer ${token}` } });
-      if (r.status === 201) {
-        setPostCaption("");
-        setPostMediaUrl("");
-        // Prepend to feed for instant feedback
-        setFeed(prev => [r.data.post, ...prev]);
-      }
-    } catch (e) {
-      alert(e?.response?.data?.message || "Failed to create post");
-    } finally {
-      setPosting(false);
-    }
-  }
+  // createPost handled inside PostComposer, use onPostCreated to prepend to feed
 
   async function toggleLike(postId) {
     try {
@@ -504,28 +478,9 @@ const HomePage = () => {
             </button>
           </div>
 
-          {/* Create Post box */}
-          <div className="rounded-2xl border shadow-sm p-6 bg-white/90 backdrop-blur mb-8">
-            <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-end">
-              <div className="flex-1">
-                <label className="text-sm text-gray-700">Media URL (image or video)</label>
-                <input value={postMediaUrl} onChange={e=>setPostMediaUrl(e.target.value)} placeholder="https://...jpg | https://...mp4" className="w-full px-3 py-2 border rounded" />
-              </div>
-              <div className="flex-1">
-                <label className="text-sm text-gray-700">Caption</label>
-                <input value={postCaption} onChange={e=>setPostCaption(e.target.value)} placeholder="Describe your work... #hashtag" className="w-full px-3 py-2 border rounded" />
-              </div>
-              <div>
-                <label className="text-sm text-gray-700">Visibility</label>
-                <select value={postVisibility} onChange={e=>setPostVisibility(e.target.value)} className="w-full px-3 py-2 border rounded">
-                  <option value="school">School only</option>
-                  <option value="public">Public</option>
-                </select>
-              </div>
-              <button disabled={posting} onClick={createPost} className="px-4 py-2 rounded bg-indigo-600 text-white md:self-end">
-                {posting ? "Posting..." : "Post"}
-              </button>
-            </div>
+          {/* Create Post - Instagram-style composer */}
+          <div className="mb-8">
+            <PostComposer user={user} onPostCreated={(p) => setFeed(prev => [p, ...prev])} />
           </div>
 
           {/* Feed */}
