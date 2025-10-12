@@ -107,6 +107,9 @@ router.get("/feed", async (req, res) => {
 router.post("/:id/like", requireStudent, async (req, res) => {
   const post = await Post.findById(req.params.id);
   if (!post) return res.status(404).json({ message: "Not found" });
+  if (String(post.author) === String(req.student.id)) {
+    return res.status(400).json({ message: "Cannot appreciate your own post" });
+  }
   // naive toggle stored in memory map per request - replace with Like model if needed
   const key = `liked:${req.student.id}`;
   const likedByMe = (post._doc[key] === true);
@@ -119,6 +122,35 @@ router.post("/:id/like", requireStudent, async (req, res) => {
   }
   await post.save();
   res.json({ liked: !likedByMe, likeCount: post.likeCount });
+});
+
+// Update a post (author only). Body can include { caption, media }
+router.patch("/:id", requireStudent, async (req, res) => {
+  const post = await Post.findById(req.params.id);
+  if (!post) return res.status(404).json({ message: "Not found" });
+  if (String(post.author) !== String(req.student.id)) {
+    return res.status(403).json({ message: "Not your post" });
+  }
+  const { caption, media } = req.body || {};
+  if (media && (!Array.isArray(media) || media.length === 0)) {
+    return res.status(400).json({ message: "media must be a non-empty array" });
+  }
+  if (typeof caption === 'string') post.caption = caption;
+  if (Array.isArray(media)) post.media = media;
+  await post.save();
+  const payload = await Post.findById(post._id).populate("author", "name school");
+  res.json({ post: payload });
+});
+
+// Delete a post (author only)
+router.delete("/:id", requireStudent, async (req, res) => {
+  const post = await Post.findById(req.params.id);
+  if (!post) return res.status(404).json({ message: "Not found" });
+  if (String(post.author) !== String(req.student.id)) {
+    return res.status(403).json({ message: "Not your post" });
+  }
+  await post.deleteOne();
+  res.json({ ok: true });
 });
 
 export default router;

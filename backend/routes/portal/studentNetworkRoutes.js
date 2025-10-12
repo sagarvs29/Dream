@@ -202,6 +202,24 @@ router.get("/network/connections", requireStudent, async (req, res) => {
   }
 });
 
+// GET /api/student/network/mentors - convenience list of my connected mentors
+router.get("/network/mentors", requireStudent, async (req, res) => {
+  try {
+    const uid = req.student._id;
+    const conns = await Connection.find({ $or: [ { "userA.userId": uid }, { "userB.userId": uid } ] }).lean();
+    const mentorIds = new Set();
+    for (const c of conns) {
+      const a = c.userA, b = c.userB;
+      if (String(a.userModel) === 'Teacher' && String(b.userId) === String(uid)) mentorIds.add(String(a.userId));
+      if (String(b.userModel) === 'Teacher' && String(a.userId) === String(uid)) mentorIds.add(String(b.userId));
+    }
+    const docs = mentorIds.size ? await Teacher.find({ _id: { $in: Array.from(mentorIds) } }).select('name email department profilePictureUrl').lean() : [];
+    res.json({ mentors: docs });
+  } catch (e) {
+    res.status(500).json({ message: 'Failed to load mentors', error: e.message });
+  }
+});
+
 // GET /api/student/network/schools - returns schools with basic info and mentors preview
 router.get("/network/schools", requireStudent, async (_req, res) => {
   try {

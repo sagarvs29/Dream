@@ -436,6 +436,18 @@ const HomePage = () => {
   // ==================== Posts (Create + Feed) ====================
   const [feed, setFeed] = useState([]);
   const [loadingFeed, setLoadingFeed] = useState(false);
+  const [myStudentId, setMyStudentId] = useState(null);
+  // Edit modal state
+  const [editingPost, setEditingPost] = useState(null);
+  const [editCaption, setEditCaption] = useState("");
+  const [editFile, setEditFile] = useState(null);
+  const [editPreview, setEditPreview] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  // Share modal state
+  const [sharePostObj, setSharePostObj] = useState(null);
+  const [mentors, setMentors] = useState([]);
+  const [loadingMentors, setLoadingMentors] = useState(false);
+  const [sendingShareTo, setSendingShareTo] = useState(null);
 
   async function loadFeed(scope = "school") {
     try {
@@ -454,6 +466,15 @@ const HomePage = () => {
   useEffect(() => {
     // try to load a school-scoped feed if logged in; falls back to public feed on server side
     loadFeed("school");
+    // also learn my id to control self actions
+    (async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+        const r = await API.get('/students/me', { headers: { Authorization: `Bearer ${token}` } });
+        setMyStudentId(r.data?.student?._id || null);
+      } catch (_) {}
+    })();
   }, []);
 
   // createPost handled inside PostComposer, use onPostCreated to prepend to feed
@@ -466,6 +487,101 @@ const HomePage = () => {
       const { liked, likeCount } = r.data || {};
       setFeed(prev => prev.map(p => p._id === postId ? { ...p, likeCount } : p));
     } catch (_) {}
+  }
+
+  function openEditPost(p) {
+    setEditingPost(p);
+    setEditCaption(p.caption || "");
+    setEditFile(null);
+    setEditPreview(p.media?.[0]?.url || "");
+  }
+
+  function onEditFileChange(e) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (!f.type.startsWith('image/') && !f.type.startsWith('video/')) {
+      alert('Please select an image or video');
+      return;
+    }
+    setEditFile(f);
+    const reader = new FileReader();
+    reader.onload = () => setEditPreview(String(reader.result || ""));
+    reader.readAsDataURL(f);
+  }
+
+  async function saveEditPost() {
+    if (!editingPost) return;
+    try {
+      setSavingEdit(true);
+      const token = localStorage.getItem("token");
+      if (!token) return alert("Login required");
+      let media = editingPost.media;
+      if (editFile) {
+        const fd = new FormData();
+        fd.append('file', editFile);
+        const up = await API.post('/posts/upload', fd, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' } });
+        media = [up.data.media];
+      }
+      const r = await API.patch(`/posts/${editingPost._id}`, { caption: editCaption, media }, { headers: { Authorization: `Bearer ${token}` } });
+      const updated = r.data?.post;
+      if (updated) {
+        setFeed(prev => prev.map(p => p._id === updated._id ? updated : p));
+        setEditingPost(null);
+      }
+    } catch (e) {
+      alert(e?.response?.data?.message || e?.message || 'Failed to update post');
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  async function deletePost(id) {
+    if (!confirm('Delete this post?')) return;
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return alert("Login required");
+      await API.delete(`/posts/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+      setFeed(prev => prev.filter(p => p._id !== id));
+    } catch (e) {
+      alert(e?.response?.data?.message || 'Failed to delete');
+    }
+  }
+
+  async function sharePost(p) {
+    setSharePostObj(p);
+    setLoadingMentors(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      const r = await API.get('/student/network/mentors', { headers: { Authorization: `Bearer ${token}` } });
+      setMentors(r.data?.mentors || []);
+    } catch (_) {
+      setMentors([]);
+    } finally {
+      setLoadingMentors(false);
+    }
+  }
+
+  async function sendShareToMentor(mid) {
+    if (!sharePostObj) return;
+    try {
+      setSendingShareTo(String(mid));
+      const token = localStorage.getItem('token');
+      if (!token) return alert('Login required');
+      // Start chat and send a message with the post
+      const start = await API.post('/chat/start', { targetId: mid, targetModel: 'Teacher' }, { headers: { Authorization: `Bearer ${token}` } });
+      const conv = start.data?.conversation;
+      if (conv?._id) {
+        const msg = `Please check my post: ${sharePostObj.media?.[0]?.url}\n\n${sharePostObj.caption || ''}`;
+        await API.post('/chat/messages', { conversation: conv._id, text: msg }, { headers: { Authorization: `Bearer ${token}` } });
+      }
+      setSharePostObj(null);
+      alert('Shared to mentor');
+    } catch (e) {
+      alert(e?.response?.data?.message || 'Failed to share');
+    } finally {
+      setSendingShareTo(null);
+    }
   }
   
   return (
@@ -517,7 +633,16 @@ const HomePage = () => {
                     <div className="p-3">
                       {p.caption && <p className="text-gray-900 whitespace-pre-wrap">{p.caption}</p>}
                       <div className="mt-3 flex items-center gap-2">
-                        <button onClick={()=>toggleLike(p._id)} className="px-3 py-1.5 rounded-full bg-gray-100 text-gray-900">Appreciate • {p.likeCount || 0}</button>
+                        {String(p.author?._id || p.author) !== String(myStudentId) && (
+                          <button onClick={()=>toggleLike(p._id)} className="px-3 py-1.5 rounded-full bg-gray-100 text-gray-900">Appreciate • {p.likeCount || 0}</button>
+                        )}
+                        {String(p.author?._id || p.author) === String(myStudentId) && (
+                          <>
+                            <button onClick={()=>openEditPost(p)} className="px-3 py-1.5 rounded-full bg-gray-100 text-gray-900">Edit</button>
+                            <button onClick={()=>deletePost(p._id)} className="px-3 py-1.5 rounded-full bg-red-100 text-red-700">Delete</button>
+                            <button onClick={()=>sharePost(p)} className="px-3 py-1.5 rounded-full bg-indigo-100 text-indigo-700">Share to mentor</button>
+                          </>
+                        )}
                         {p.visibility === "school" && <span className="text-xs text-gray-500">School-only</span>}
                       </div>
                     </div>
@@ -660,6 +785,67 @@ const HomePage = () => {
             </div>
           )}
         </div>
+        {/* Edit Post Modal */}
+        {editingPost && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="font-semibold">Edit Post</div>
+                <button onClick={()=>setEditingPost(null)} className="text-gray-600 hover:text-gray-900">✖</button>
+              </div>
+              <div className="space-y-3">
+                <textarea value={editCaption} onChange={e=>setEditCaption(e.target.value)} rows={3} className="w-full border rounded px-3 py-2" placeholder="Update caption" />
+                {editPreview && (
+                  <div className="rounded-lg overflow-hidden border bg-black/5">
+                    {editingPost.media?.[0]?.kind === 'video' || (editFile && editFile.type.startsWith('video/')) ? (
+                      <video controls className="w-full max-h-[40vh] object-contain"><source src={editPreview} /></video>
+                    ) : (
+                      <img src={editPreview} className="w-full max-h-[40vh] object-contain" />
+                    )}
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <label className="px-3 py-2 rounded bg-gray-100 text-gray-800 cursor-pointer">
+                    Replace media
+                    <input type="file" accept="image/*,video/*" className="hidden" onChange={onEditFileChange} />
+                  </label>
+                  <button disabled={savingEdit} onClick={saveEditPost} className="ml-auto px-4 py-2 rounded bg-indigo-600 text-white">{savingEdit? 'Saving…':'Save'}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Share to Mentor Modal */}
+        {sharePostObj && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-white shadow-xl p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="font-semibold">Share to Mentor</div>
+                <button onClick={()=>setSharePostObj(null)} className="text-gray-600 hover:text-gray-900">✖</button>
+              </div>
+              {loadingMentors ? (
+                <div className="text-gray-600">Loading mentors…</div>
+              ) : mentors.length === 0 ? (
+                <div className="text-gray-600">No connected mentors found.</div>
+              ) : (
+                <ul className="space-y-2 max-h-80 overflow-auto">
+                  {mentors.map(m => (
+                    <li key={m._id} className="flex items-center justify-between rounded border px-3 py-2">
+                      <div>
+                        <div className="font-medium">{m.name}</div>
+                        <div className="text-xs text-gray-600">{m.email || m.department || ''}</div>
+                      </div>
+                      <button disabled={String(sendingShareTo)===String(m._id)} onClick={()=>sendShareToMentor(m._id)} className="px-3 py-1.5 rounded bg-indigo-600 text-white text-sm">
+                        {String(sendingShareTo)===String(m._id) ? 'Sending…' : 'Share'}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
         {/* Profile modal overlay */}
         {showUserInfo && (
           <div className="fixed inset-0 z-50 flex items-start justify-center pt-14 bg-black/30">

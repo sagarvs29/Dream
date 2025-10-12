@@ -371,10 +371,16 @@ export default function MentorDashboard() {
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <button className="px-3 py-1 rounded bg-green-500/80 text-white text-sm">
+                        <button
+                          onClick={() => actRequest(r._id, 'accept')}
+                          className="px-3 py-1 rounded bg-green-500/80 text-white text-sm"
+                        >
                           Accept
                         </button>
-                        <button className="px-3 py-1 rounded bg-red-500/80 text-white text-sm">
+                        <button
+                          onClick={() => actRequest(r._id, 'reject')}
+                          className="px-3 py-1 rounded bg-red-500/80 text-white text-sm"
+                        >
                           Decline
                         </button>
                       </div>
