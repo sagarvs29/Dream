@@ -8,6 +8,8 @@ import multer from "multer";
 import cloudinary from "../../utils/cloudinary.js";
 import streamifier from "streamifier";
 import Sponsor from "../../models/Sponsor.js";
+import Student from "../../models/Student.js";
+import Teacher from "../../models/Teacher.js";
 
 const router = express.Router();
 
@@ -28,6 +30,64 @@ router.post("/schools", requireServerAdmin, async (req, res) => {
 router.get("/schools", requireServerAdmin, async (req, res) => {
   const schools = await School.find().sort({ createdAt: -1 });
   res.json({ schools });
+});
+
+// Delete a school (with optional cascade)
+// Usage: DELETE /api/server/schools/:id[?force=true]
+// - If force is not provided and there are linked records, returns 409 with counts
+// - If force=true, deletes linked Students, Teachers, and SCHOOL Admins, cleans logo from Cloudinary, then deletes the School
+router.delete("/schools/:id", requireServerAdmin, async (req, res) => {
+  const { id } = req.params;
+  const force = String(req.query.force).toLowerCase() === "true";
+
+  const school = await School.findById(id);
+  if (!school) return res.status(404).json({ message: "School not found" });
+
+  const [studentCount, teacherCount, adminCount] = await Promise.all([
+    Student.countDocuments({ school: id }),
+    Teacher.countDocuments({ school: id }),
+    Admin.countDocuments({ school: id, role: "SCHOOL" })
+  ]);
+
+  if (!force && (studentCount > 0 || teacherCount > 0 || adminCount > 0)) {
+    return res.status(409).json({
+      message: "School has linked records. Use ?force=true to cascade delete or detach/reassign first.",
+      counts: { students: studentCount, teachers: teacherCount, admins: adminCount }
+    });
+  }
+
+  // Best-effort logo cleanup
+  try {
+    if (school.logoPublicId) {
+      await cloudinary.uploader.destroy(school.logoPublicId);
+    }
+  } catch (_) {}
+
+  let deleted = { students: 0, teachers: 0, admins: 0 };
+  if (force) {
+    const [sRes, tRes, aRes] = await Promise.all([
+      Student.deleteMany({ school: id }),
+      Teacher.deleteMany({ school: id }),
+      Admin.deleteMany({ school: id, role: "SCHOOL" })
+    ]);
+    deleted = {
+      students: sRes?.deletedCount || 0,
+      teachers: tRes?.deletedCount || 0,
+      admins: aRes?.deletedCount || 0,
+    };
+  }
+
+  await school.deleteOne();
+  await AuditLog.create({
+    actorId: req.admin.sub,
+    actorRole: "SERVER",
+    action: "DeleteSchool",
+    entityType: "School",
+    entityId: String(id),
+    meta: { force, deleted }
+  });
+
+  return res.json({ ok: true, schoolId: String(id), deleted, force });
 });
 
 // Provision school admin
