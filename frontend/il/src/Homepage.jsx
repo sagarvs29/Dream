@@ -431,6 +431,68 @@ const HomePage = () => {
     const id = setInterval(() => { loadMessages(chatConv._id); }, 5000);
     return () => clearInterval(id);
   }, [chatOpen, chatConv?._id]);
+
+  // ==================== Posts (Create + Feed) ====================
+  const [postCaption, setPostCaption] = useState("");
+  const [postMediaUrl, setPostMediaUrl] = useState("");
+  const [postVisibility, setPostVisibility] = useState("school"); // "public" | "school"
+  const [posting, setPosting] = useState(false);
+  const [feed, setFeed] = useState([]);
+  const [loadingFeed, setLoadingFeed] = useState(false);
+
+  async function loadFeed(scope = "school") {
+    try {
+      setLoadingFeed(true);
+      const token = localStorage.getItem("token");
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const r = await API.get(`/posts/feed`, { params: { scope }, headers });
+      setFeed(r.data?.posts || []);
+    } catch (_) {
+      setFeed([]);
+    } finally {
+      setLoadingFeed(false);
+    }
+  }
+
+  useEffect(() => {
+    // try to load a school-scoped feed if logged in; falls back to public feed on server side
+    loadFeed("school");
+  }, []);
+
+  async function createPost(e) {
+    e?.preventDefault?.();
+    const url = postMediaUrl.trim();
+    const caption = postCaption.trim();
+    if (!url) return alert("Provide an image/video URL");
+    try {
+      setPosting(true);
+      const token = localStorage.getItem("token");
+      if (!token) return alert("Login required");
+      const media = [{ kind: url.match(/\.(mp4|webm|ogg)(\?|$)/i) ? "video" : "image", url }];
+      const hashtags = (caption.match(/#\w+/g) || []).map(h => h.toLowerCase());
+      const r = await API.post(`/posts`, { media, caption, hashtags, visibility: postVisibility }, { headers: { Authorization: `Bearer ${token}` } });
+      if (r.status === 201) {
+        setPostCaption("");
+        setPostMediaUrl("");
+        // Prepend to feed for instant feedback
+        setFeed(prev => [r.data.post, ...prev]);
+      }
+    } catch (e) {
+      alert(e?.response?.data?.message || "Failed to create post");
+    } finally {
+      setPosting(false);
+    }
+  }
+
+  async function toggleLike(postId) {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return alert("Login required");
+      const r = await API.post(`/posts/${postId}/like`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      const { liked, likeCount } = r.data || {};
+      setFeed(prev => prev.map(p => p._id === postId ? { ...p, likeCount } : p));
+    } catch (_) {}
+  }
   
   return (
       <div className="pt-24 px-6 pb-16">
@@ -440,6 +502,74 @@ const HomePage = () => {
             <button onClick={openProfile} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
               <span>Profile</span>
             </button>
+          </div>
+
+          {/* Create Post box */}
+          <div className="rounded-2xl border shadow-sm p-6 bg-white/90 backdrop-blur mb-8">
+            <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-end">
+              <div className="flex-1">
+                <label className="text-sm text-gray-700">Media URL (image or video)</label>
+                <input value={postMediaUrl} onChange={e=>setPostMediaUrl(e.target.value)} placeholder="https://...jpg | https://...mp4" className="w-full px-3 py-2 border rounded" />
+              </div>
+              <div className="flex-1">
+                <label className="text-sm text-gray-700">Caption</label>
+                <input value={postCaption} onChange={e=>setPostCaption(e.target.value)} placeholder="Describe your work... #hashtag" className="w-full px-3 py-2 border rounded" />
+              </div>
+              <div>
+                <label className="text-sm text-gray-700">Visibility</label>
+                <select value={postVisibility} onChange={e=>setPostVisibility(e.target.value)} className="w-full px-3 py-2 border rounded">
+                  <option value="school">School only</option>
+                  <option value="public">Public</option>
+                </select>
+              </div>
+              <button disabled={posting} onClick={createPost} className="px-4 py-2 rounded bg-indigo-600 text-white md:self-end">
+                {posting ? "Posting..." : "Post"}
+              </button>
+            </div>
+          </div>
+
+          {/* Feed */}
+          <div className="rounded-2xl border shadow-sm p-6 bg-white/90 backdrop-blur mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">Feed</h2>
+              <div className="flex items-center gap-2">
+                <button onClick={()=>loadFeed("school")} className="px-3 py-1.5 rounded bg-gray-200">School</button>
+                <button onClick={()=>loadFeed("public")} className="px-3 py-1.5 rounded bg-gray-200">Public</button>
+              </div>
+            </div>
+            {loadingFeed ? (
+              <div className="text-gray-600">Loading…</div>
+            ) : feed.length === 0 ? (
+              <div className="text-gray-500">No posts yet</div>
+            ) : (
+              <div className="space-y-4">
+                {feed.map(p => (
+                  <article key={p._id} className="rounded-xl border bg-white overflow-hidden">
+                    <div className="p-3 flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-gray-200" />
+                      <div className="text-gray-900 font-medium">{p.author?.name || "Student"}</div>
+                      <div className="ml-auto text-xs text-gray-500">{new Date(p.createdAt).toLocaleString()}</div>
+                    </div>
+                    <div className="bg-black/5">
+                      {p.media?.[0]?.kind === "video" ? (
+                        <video controls className="w-full h-auto max-h-[60vh] object-contain">
+                          <source src={p.media?.[0]?.url} />
+                        </video>
+                      ) : (
+                        <img src={p.media?.[0]?.url} alt="post" className="w-full h-auto object-contain" />
+                      )}
+                    </div>
+                    <div className="p-3">
+                      {p.caption && <p className="text-gray-900 whitespace-pre-wrap">{p.caption}</p>}
+                      <div className="mt-3 flex items-center gap-2">
+                        <button onClick={()=>toggleLike(p._id)} className="px-3 py-1.5 rounded-full bg-gray-100 text-gray-900">Appreciate • {p.likeCount || 0}</button>
+                        {p.visibility === "school" && <span className="text-xs text-gray-500">School-only</span>}
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Network entry/panel below */}
