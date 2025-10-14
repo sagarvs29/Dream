@@ -12,6 +12,8 @@ const HomePage = () => {
   const [showUserInfo, setShowUserInfo] = useState(false);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [expandedCaptions, setExpandedCaptions] = useState({}); // postId -> bool
+  const [menuOpenId, setMenuOpenId] = useState(null); // owner three-dot menu
 
   // No auto fetch on mount; we'll fetch when the user clicks Profile
   useEffect(() => {}, []);
@@ -205,6 +207,49 @@ const HomePage = () => {
     await fetchUserProfile();
     await fetchStudentBasics();
   };
+
+  const initialsOfName = (name) => {
+    if (!name) return "U";
+    return name
+      .split(" ")
+      .map((s) => s[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+  };
+
+  async function sendCollabRequest(targetStudentId) {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return alert("Login required");
+      const r = await API.post(
+        "/student/network/requests",
+        { targetId: targetStudentId, targetModel: "Student" },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (r.data?.success) {
+        alert("Collaboration request sent");
+      } else {
+        alert(r.data?.message || "Failed to send request");
+      }
+    } catch (e) {
+      alert(e?.response?.data?.message || e?.message || "Failed to send request");
+    }
+  }
+
+  async function shareGeneric(post) {
+    try {
+      const text = `${post.caption || ''}${post.caption ? '\n' : ''}${post.media?.[0]?.url || ''}`.trim();
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        alert("Post link copied to clipboard");
+      } else {
+        window.prompt("Copy this", text);
+      }
+    } catch (_) {
+      alert("Could not copy");
+    }
+  }
 
   const [recs, setRecs] = useState({ mentors: [], students: [] });
   const [requestedStudents, setRequestedStudents] = useState([]);
@@ -448,6 +493,9 @@ const HomePage = () => {
   const [mentors, setMentors] = useState([]);
   const [loadingMentors, setLoadingMentors] = useState(false);
   const [sendingShareTo, setSendingShareTo] = useState(null);
+  const [appreciationsByPost, setAppreciationsByPost] = useState({}); // postId -> list
+  const [newAppText, setNewAppText] = useState({}); // postId -> text
+  const [connectedStudentIds, setConnectedStudentIds] = useState([]);
 
   async function loadFeed(scope = "school") {
     try {
@@ -473,6 +521,23 @@ const HomePage = () => {
         if (!token) return;
         const r = await API.get('/students/me', { headers: { Authorization: `Bearer ${token}` } });
         setMyStudentId(r.data?.student?._id || null);
+      } catch (_) {}
+    })();
+    // load connections for connected badge
+    (async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const r = await API.get('/student/network/connections', { headers: { Authorization: `Bearer ${token}` } });
+        const myId = await ensureMyId?.();
+        const list = r.data?.connections || [];
+        const setIds = new Set();
+        for (const c of list) {
+          const a = c.userA, b = c.userB;
+          if (String(a.userModel) === 'Student' && String(b.userId) === String(myId)) setIds.add(String(a.userId));
+          if (String(b.userModel) === 'Student' && String(a.userId) === String(myId)) setIds.add(String(b.userId));
+        }
+        setConnectedStudentIds(Array.from(setIds));
       } catch (_) {}
     })();
   }, []);
@@ -583,6 +648,32 @@ const HomePage = () => {
       setSendingShareTo(null);
     }
   }
+
+  async function loadAppreciations(postId) {
+    try {
+      const r = await API.get(`/posts/${postId}/appreciations`);
+      setAppreciationsByPost(prev => ({ ...prev, [postId]: r.data?.appreciations || [] }));
+    } catch (_) {
+      setAppreciationsByPost(prev => ({ ...prev, [postId]: [] }));
+    }
+  }
+
+  async function addAppreciation(postId) {
+    const text = (newAppText[postId] || '').trim();
+    if (!text) return;
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return alert('Login required');
+      const r = await API.post(`/posts/${postId}/appreciations`, { text }, { headers: { Authorization: `Bearer ${token}` } });
+      const a = r.data?.appreciation;
+      if (a) {
+        setAppreciationsByPost(prev => ({ ...prev, [postId]: [ ...(prev[postId]||[]), a ] }));
+        setNewAppText(prev => ({ ...prev, [postId]: '' }));
+      }
+    } catch (e) {
+      alert(e?.response?.data?.message || 'Failed to add comment');
+    }
+  }
   
   return (
       <div className="pt-24 px-6 pb-16">
@@ -599,13 +690,13 @@ const HomePage = () => {
             <PostComposer user={user} onPostCreated={(p) => setFeed(prev => [p, ...prev])} />
           </div>
 
-          {/* Feed */}
-          <div className="rounded-2xl border shadow-sm p-6 bg-white/90 backdrop-blur mb-8">
+          {/* Feed - Redesigned post cards */}
+          <div className="rounded-2xl border shadow-sm p-6 bg-white mb-8">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold">Feed</h2>
               <div className="flex items-center gap-2">
-                <button onClick={()=>loadFeed("school")} className="px-3 py-1.5 rounded bg-gray-200">School</button>
-                <button onClick={()=>loadFeed("public")} className="px-3 py-1.5 rounded bg-gray-200">Public</button>
+                <button onClick={()=>loadFeed("school")} className="px-3 py-1.5 rounded bg-gray-100 text-gray-800">School</button>
+                <button onClick={()=>loadFeed("public")} className="px-3 py-1.5 rounded bg-gray-100 text-gray-800">Public</button>
               </div>
             </div>
             {loadingFeed ? (
@@ -613,41 +704,119 @@ const HomePage = () => {
             ) : feed.length === 0 ? (
               <div className="text-gray-500">No posts yet</div>
             ) : (
-              <div className="space-y-4">
-                {feed.map(p => (
-                  <article key={p._id} className="rounded-xl border bg-white overflow-hidden">
-                    <div className="p-3 flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-gray-200" />
-                      <div className="text-gray-900 font-medium">{p.author?.name || "Student"}</div>
-                      <div className="ml-auto text-xs text-gray-500">{new Date(p.createdAt).toLocaleString()}</div>
-                    </div>
-                    <div className="bg-black/5">
-                      {p.media?.[0]?.kind === "video" ? (
-                        <video controls className="w-full h-auto max-h-[60vh] object-contain">
-                          <source src={p.media?.[0]?.url} />
-                        </video>
-                      ) : (
-                        <img src={p.media?.[0]?.url} alt="post" className="w-full h-auto object-contain" />
-                      )}
-                    </div>
-                    <div className="p-3">
-                      {p.caption && <p className="text-gray-900 whitespace-pre-wrap">{p.caption}</p>}
-                      <div className="mt-3 flex items-center gap-2">
-                        {String(p.author?._id || p.author) !== String(myStudentId) && (
-                          <button onClick={()=>toggleLike(p._id)} className="px-3 py-1.5 rounded-full bg-gray-100 text-gray-900">Appreciate • {p.likeCount || 0}</button>
-                        )}
-                        {String(p.author?._id || p.author) === String(myStudentId) && (
-                          <>
-                            <button onClick={()=>openEditPost(p)} className="px-3 py-1.5 rounded-full bg-gray-100 text-gray-900">Edit</button>
-                            <button onClick={()=>deletePost(p._id)} className="px-3 py-1.5 rounded-full bg-red-100 text-red-700">Delete</button>
-                            <button onClick={()=>sharePost(p)} className="px-3 py-1.5 rounded-full bg-indigo-100 text-indigo-700">Share to mentor</button>
-                          </>
-                        )}
-                        {p.visibility === "school" && <span className="text-xs text-gray-500">School-only</span>}
+              <div className="space-y-5">
+                {feed.map((p) => {
+                  const isOwner = String(p.author?._id || p.author) === String(myStudentId);
+                  const authorName = p.author?.name || "Student";
+                  const media = Array.isArray(p.media) ? p.media[0] : p.media;
+                  const hasMedia = !!(media && media.url);
+                  const expanded = !!expandedCaptions[p._id];
+                  const caption = String(p.caption || "");
+                  const shortCaption = caption.length > 220 && !expanded ? caption.slice(0, 220) + " …" : caption;
+                  const authorId = p.author?._id || p.author;
+                  return (
+                    <article key={p._id} className="bg-white rounded-xl shadow p-4 border border-gray-100">
+                      {/* Header */}
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center text-sm font-semibold">
+                          {initialsOfName(authorName)}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-medium text-gray-900 truncate">{authorName}</div>
+                          <div className="text-xs text-gray-500">{new Date(p.createdAt).toLocaleString()}</div>
+                        </div>
+                        <div className="ml-auto flex items-center gap-2">
+                          {p.visibility === "school" && (
+                            <span className="text-[10px] bg-gray-100 text-gray-600 rounded-full px-2 py-0.5">School-only</span>
+                          )}
+                          {connectedStudentIds.includes(String(authorId)) && (
+                            <span className="text-[10px] bg-emerald-100 text-emerald-700 rounded-full px-2 py-0.5">Connected</span>
+                          )}
+                          {isOwner && (
+                            <div className="relative">
+                              <button
+                                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100"
+                                onClick={() => setMenuOpenId((v) => (v === p._id ? null : p._id))}
+                                title="Options"
+                              >
+                                ⋮
+                              </button>
+                              {menuOpenId === p._id && (
+                                <div className="absolute right-0 mt-2 w-36 bg-white border border-gray-200 rounded-lg shadow z-10">
+                                  <button onClick={() => { setMenuOpenId(null); openEditPost(p); }} className="w-full text-left px-3 py-2 hover:bg-gray-50">✏️ Edit</button>
+                                  <button onClick={() => { setMenuOpenId(null); deletePost(p._id); }} className="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50">🗑️ Delete</button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </article>
-                ))}
+
+                      {/* Media (only if present) */}
+                      {hasMedia && (
+                        <div className="mt-3 overflow-hidden rounded-lg">
+                          {media.kind === "video" ? (
+                            <video controls className="w-full h-auto max-h-[60vh] object-contain bg-black">
+                              <source src={media.url} />
+                            </video>
+                          ) : (
+                            <img src={media.url} alt="post media" className="w-full h-auto object-contain bg-black/5" />
+                          )}
+                        </div>
+                      )}
+
+                      {/* Action bar (icons only) */}
+                      <div className="mt-3 flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <button
+                            className={`w-9 h-9 rounded-full flex items-center justify-center hover:bg-gray-100 ${isOwner ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            onClick={() => !isOwner && toggleLike(p._id)}
+                            title="Motivate"
+                          >
+                            <span className="text-xl" role="img" aria-label="motivate">🔥</span>
+                          </button>
+                          <button
+                            className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-gray-100"
+                            onClick={() => sendCollabRequest(authorId)}
+                            title="Collab"
+                          >
+                            <span className="text-xl" role="img" aria-label="collab">🤝</span>
+                          </button>
+                          <button
+                            className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-gray-100"
+                            onClick={() => shareGeneric(p)}
+                            title="Share"
+                          >
+                            <span className="text-xl" role="img" aria-label="share">🔗</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Stats */}
+                      <div className="mt-2 text-sm text-gray-700">🔥 {p.likeCount || 0} Motivates</div>
+
+                      {/* Caption */}
+                      {caption && (
+                        <div className="mt-1 text-gray-900 whitespace-pre-wrap">
+                          {shortCaption}
+                          {caption.length > 220 && (
+                            <button
+                              className="ml-1 text-sm text-gray-500 hover:text-gray-700"
+                              onClick={() => setExpandedCaptions((prev) => ({ ...prev, [p._id]: !prev[p._id] }))}
+                            >
+                              {expanded ? "less" : "more"}
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Collab area placeholder */}
+                      <div className="mt-2">
+                        <button className="text-sm text-indigo-700 hover:underline" title="View collaborators (coming soon)">View Collaborators</button>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             )}
           </div>

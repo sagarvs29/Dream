@@ -15,6 +15,10 @@ export default function MentorDashboard() {
   const [mentees, setMentees] = useState([]);
   const [loadingReq, setLoadingReq] = useState(false);
   const [chatFilter, setChatFilter] = useState("");
+  const [posts, setPosts] = useState([]);
+  const [loadingPosts, setLoadingPosts] = useState(false);
+  const [commentsByPost, setCommentsByPost] = useState({});
+  const [newComment, setNewComment] = useState({});
 
   const token =
     typeof window !== "undefined"
@@ -75,6 +79,42 @@ export default function MentorDashboard() {
     if (r.ok) setMe((await r.json()).mentor);
   }
 
+  async function loadMentorPosts() {
+    setLoadingPosts(true);
+    try {
+      const r = await fetch(`${API_BASE}/posts/mentor-feed`, { headers });
+      if (r.ok) setPosts((await r.json()).posts || []);
+    } finally {
+      setLoadingPosts(false);
+    }
+  }
+
+  async function toggleLikePost(id) {
+    const r = await fetch(`${API_BASE}/posts/${id}/like`, { method: 'POST', headers });
+    const data = await r.json().catch(()=>({}));
+    if (r.ok) {
+      setPosts(prev => prev.map(p => p._id === id ? { ...p, likeCount: data.likeCount } : p));
+    }
+  }
+
+  async function loadComments(postId) {
+    const r = await fetch(`${API_BASE}/posts/${postId}/appreciations`, { headers });
+    const data = await r.json().catch(()=>({}));
+    if (r.ok) setCommentsByPost(prev => ({ ...prev, [postId]: data.appreciations || data.items || [] }));
+  }
+
+  async function addComment(postId) {
+    const text = (newComment[postId] || '').trim();
+    if (!text) return;
+    const r = await fetch(`${API_BASE}/posts/${postId}/appreciations`, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+    const data = await r.json().catch(()=>({}));
+    if (r.ok && (data.appreciation || data.item)) {
+      const a = data.appreciation || data.item;
+      setCommentsByPost(prev => ({ ...prev, [postId]: [ ...(prev[postId]||[]), a ] }));
+      setNewComment(prev => ({ ...prev, [postId]: '' }));
+    }
+  }
+
   async function loadMessages(convId) {
     if (!convId) return;
     setLoadingMsgs(true);
@@ -119,7 +159,30 @@ export default function MentorDashboard() {
       setCurrent(data.conversation);
       setTab("Chat");
       await loadMessages(data.conversation._id);
+      return data.conversation;
     }
+  }
+
+  async function sendToConversation(conversationId, bodyText) {
+    if (!conversationId || !bodyText?.trim()) return false;
+    const r = await fetch(`${API_BASE}/chat/messages`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ conversation: conversationId, text: bodyText.trim() }),
+    });
+    return r.ok;
+  }
+
+  async function sharePostViaChat(post) {
+    try {
+      const studentId = post?.author?._id || post?.author?.id || post?.author;
+      if (!studentId) return;
+      const conv = await startChatWithStudent(studentId);
+      const convId = conv?._id || current?._id;
+      const link = post?.media?.[0]?.url || post?.media?.url || "";
+      const msg = `Shared a post${link ? `: ${link}` : ''}`;
+      await sendToConversation(convId, msg);
+    } catch (_) {}
   }
 
   useEffect(() => {
@@ -128,6 +191,7 @@ export default function MentorDashboard() {
       loadConversations();
       loadRequests();
       loadMentees();
+      loadMentorPosts();
     }
   }, [token]);
 
@@ -170,7 +234,7 @@ export default function MentorDashboard() {
               role="tablist"
               aria-label="Dashboard tabs"
             >
-              {["Chat", "Requests", "Mentees"].map((t) => (
+              {["Chat", "Requests", "Mentees", "Posts"].map((t) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -187,7 +251,7 @@ export default function MentorDashboard() {
 
             {/* Mobile Tabs */}
             <nav className="md:hidden flex overflow-x-auto no-scrollbar bg-white/10 rounded-xl px-2 py-1 gap-2">
-              {["Chat", "Requests", "Mentees"].map((t) => (
+              {["Chat", "Requests", "Mentees", "Posts"].map((t) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -317,6 +381,11 @@ export default function MentorDashboard() {
                   Your Mentees
                 </div>
               )}
+              {tab === "Posts" && (
+                <div className="font-semibold text-base sm:text-lg">
+                  Posts
+                </div>
+              )}
             </div>
 
             {/* ======= Tab Content ======= */}
@@ -422,6 +491,82 @@ export default function MentorDashboard() {
                     <div className="opacity-80">No mentees yet</div>
                   )}
                 </>
+              )}
+
+              {tab === "Posts" && (
+                <div className="space-y-3">
+                  {loadingPosts && <div className="opacity-80">Loading posts…</div>}
+                  {!loadingPosts && posts.length === 0 && (
+                    <div className="opacity-80">No posts to show yet.</div>
+                  )}
+                  {posts.map((post) => (
+                    <div key={post._id} className="rounded-lg border border-white/15 bg-white/5 p-3 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-full bg-white/30 text-white flex items-center justify-center text-xs font-semibold">
+                            {initialsOf(post.author)}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{post.author?.name || "Student"}</div>
+                            <div className="text-xs opacity-70 truncate">{new Date(post.createdAt).toLocaleString()}</div>
+                          </div>
+                        </div>
+                        {post.connected && (
+                          <span className="text-[10px] sm:text-xs bg-green-500/20 text-green-200 px-2 py-1 rounded-full">Connected</span>
+                        )}
+                      </div>
+
+                      {post.caption && (
+                        <div className="text-sm sm:text-base whitespace-pre-wrap">{post.caption}</div>
+                      )}
+
+                      {post.media?.url && (
+                        post.media.kind === "video" ? (
+                          <video className="w-full rounded-lg max-h-[60vh]" controls>
+                            <source src={post.media.url} />
+                          </video>
+                        ) : (
+                          <img src={post.media.url} alt="post media" className="w-full rounded-lg max-h-[60vh] object-contain bg-black/20" />
+                        )
+                      )}
+
+                      <div className="flex items-center gap-4 text-sm opacity-90">
+                        <button onClick={() => toggleLikePost(post._id)} className="hover:opacity-100">
+                          ❤ {post.likeCount || 0}
+                        </button>
+                        <button onClick={() => loadComments(post._id)} className="hover:opacity-100">
+                          Comments
+                        </button>
+                        {post.author && (
+                          <button onClick={() => sharePostViaChat(post)} className="hover:opacity-100">
+                            Share via Chat
+                          </button>
+                        )}
+                      </div>
+
+                      {commentsByPost[post._id] && (
+                        <div className="space-y-2">
+                          {commentsByPost[post._id].map((a) => (
+                            <div key={a._id} className="text-sm">
+                              <span className="font-medium">{a.author?.name || "User"}:</span> {a.text}
+                            </div>
+                          ))}
+                          <div className="flex items-center gap-2">
+                            <input
+                              value={newComment[post._id] || ""}
+                              onChange={(e) => setNewComment((prev) => ({ ...prev, [post._id]: e.target.value }))}
+                              className="flex-1 border border-white/20 bg-white/10 rounded px-2 py-1 text-white placeholder-white/60"
+                              placeholder="Add a comment…"
+                            />
+                            <button onClick={() => addComment(post._id)} className="px-3 py-1 rounded bg-blue-600 text-white">
+                              Post
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 

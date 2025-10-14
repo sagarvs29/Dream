@@ -1,6 +1,8 @@
 import express from "express";
 import jwt from "jsonwebtoken";
 import Post from "../models/Post.js";
+import PostLike from "../models/PostLike.js";
+import Appreciation from "../models/Appreciation.js";
 import Student from "../models/Student.js";
 import multer from "multer";
 import cloudinary from "../utils/cloudinary.js";
@@ -19,6 +21,26 @@ function requireStudent(req, res, next) {
     next();
   } catch (e) {
     return res.status(401).json({ message: "Invalid token" });
+  }
+}
+
+// Accept Student or Mentor as actor for interactions
+function requireUser(req, res, next) {
+  try {
+    const token = req.header("Authorization")?.replace("Bearer ", "");
+    if (!token) return res.status(401).json({ message: "No token" });
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.role === 'STUDENT') {
+      req.actor = { userId: decoded.sub, userModel: 'Student', schoolId: decoded.schoolId };
+      return next();
+    }
+    if (decoded.role === 'MENTOR') {
+      req.actor = { userId: decoded.sub, userModel: 'Teacher', schoolId: decoded.schoolId };
+      return next();
+    }
+    return res.status(403).json({ message: 'Not allowed' });
+  } catch (e) {
+    return res.status(401).json({ message: 'Invalid token' });
   }
 }
 
@@ -104,24 +126,29 @@ router.get("/feed", async (req, res) => {
 });
 
 // Like toggle
-router.post("/:id/like", requireStudent, async (req, res) => {
+// Toggle like for student (and keep count in a dedicated collection)
+router.post("/:id/like", requireUser, async (req, res) => {
   const post = await Post.findById(req.params.id);
   if (!post) return res.status(404).json({ message: "Not found" });
-  if (String(post.author) === String(req.student.id)) {
-    return res.status(400).json({ message: "Cannot appreciate your own post" });
+  if (req.actor.userModel === 'Student' && String(post.author) === String(req.actor.userId)) {
+    return res.status(400).json({ message: "Cannot like your own post" });
   }
-  // naive toggle stored in memory map per request - replace with Like model if needed
-  const key = `liked:${req.student.id}`;
-  const likedByMe = (post._doc[key] === true);
-  if (likedByMe) {
-    post.likeCount = Math.max(0, (post.likeCount || 0) - 1);
-    post._doc[key] = false;
+  const key = { post: post._id, 'by.userId': req.actor.userId };
+  const existing = await PostLike.findOne(key);
+  if (existing) {
+    await existing.deleteOne();
   } else {
-    post.likeCount = (post.likeCount || 0) + 1;
-    post._doc[key] = true;
+    try { await PostLike.create({ post: post._id, by: { userId: req.actor.userId, userModel: req.actor.userModel } }); } catch (_) {}
   }
-  await post.save();
-  res.json({ liked: !likedByMe, likeCount: post.likeCount });
+  const likeCount = await PostLike.countDocuments({ post: post._id });
+  await Post.updateOne({ _id: post._id }, { $set: { likeCount } });
+  res.json({ liked: !existing, likeCount });
+});
+
+// Get likes count
+router.get('/:id/likes', async (req, res) => {
+  const likeCount = await PostLike.countDocuments({ post: req.params.id });
+  res.json({ likeCount });
 });
 
 // Update a post (author only). Body can include { caption, media }
@@ -151,6 +178,58 @@ router.delete("/:id", requireStudent, async (req, res) => {
   }
   await post.deleteOne();
   res.json({ ok: true });
+});
+
+// Appreciations (comments)
+router.get('/:id/appreciations', async (req, res) => {
+  const list = await Appreciation.find({ post: req.params.id }).sort({ createdAt: 1 }).lean();
+  res.json({ appreciations: list });
+});
+
+router.post('/:id/appreciations', requireUser, async (req, res) => {
+  const post = await Post.findById(req.params.id);
+  if (!post) return res.status(404).json({ message: 'Post not found' });
+  const text = String(req.body?.text || '').trim();
+  if (!text) return res.status(400).json({ message: 'Text required' });
+  if (text.length > 500) return res.status(400).json({ message: 'Too long' });
+  const a = await Appreciation.create({ post: post._id, author: { userId: req.actor.userId, userModel: req.actor.userModel }, text });
+  res.status(201).json({ appreciation: a });
+});
+
+// Mentor feed: show public posts and prioritize mentees' public posts
+router.get('/mentor-feed', async (req, res) => {
+  try {
+    let actor = null;
+    try {
+      const token = req.header('Authorization')?.replace('Bearer ', '');
+      if (token) {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        if (decoded.role === 'MENTOR') actor = { userId: decoded.sub };
+      }
+    } catch (_) {}
+
+    const match = { visibility: 'public' };
+    let posts = await Post.find(match).sort({ createdAt: -1 }).limit(50).populate('author','name school');
+    if (!actor) return res.json({ posts });
+
+    // Mark posts authored by mentees as connected
+    // We’ll compute mentee ids via Connection model but to avoid an import cycle, do a light query here
+    const Connection = (await import('../models/Connection.js')).default;
+    const conns = await Connection.find({ $or: [ { 'userA.userId': actor.userId }, { 'userB.userId': actor.userId } ] }).lean();
+    const menteeIds = new Set();
+    for (const c of conns) {
+      const a = c.userA, b = c.userB;
+      if (String(a.userModel) === 'Student' && String(b.userId) === String(actor.userId)) menteeIds.add(String(a.userId));
+      if (String(b.userModel) === 'Student' && String(a.userId) === String(actor.userId)) menteeIds.add(String(b.userId));
+    }
+    const enriched = posts.map(p => ({
+      ...p.toObject(),
+      connected: menteeIds.has(String(p.author?._id || p.author))
+    }));
+    res.json({ posts: enriched });
+  } catch (e) {
+    res.status(500).json({ message: 'Failed to load mentor feed' });
+  }
 });
 
 export default router;
