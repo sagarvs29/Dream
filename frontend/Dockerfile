@@ -14,8 +14,10 @@ RUN cd il && npm run build
 FROM node:20-alpine AS runtime
 WORKDIR /app
 RUN npm i -g serve
+# Railway provides PORT at runtime; default to 3000 for local runs
 ENV PORT=3000
 # Expose is optional for Railway; the platform sets PORT
 EXPOSE 3000
 COPY --from=build /app/il/dist ./dist
-CMD ["serve", "-s", "dist", "-l", "${PORT}"]
+# Use shell form so $PORT is expanded, and bind to 0.0.0.0 inside the container
+CMD ["sh", "-c", "serve -s dist -l tcp://0.0.0.0:${PORT}"]
