@@ -1,0 +1,10 @@
+# Root-level Railway config to build and start the frontend from its subdirectory
+
+[build]
+builder = "nixpacks"
+buildCommand = "cd frontend/il && npm ci && npm run build"
+
+[deploy]
+startCommand = "cd frontend/il && npm run preview"
+healthcheckPath = "/"
+restartPolicyType = "never"
