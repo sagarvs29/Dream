@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 const API = import.meta.env?.VITE_API_BASE_URL || "http://localhost:5000/api";
 
@@ -6,9 +6,13 @@ export default function SchoolDashboard() {
   const [pending, setPending] = useState([]);
   const [approved, setApproved] = useState([]);
   const [rejected, setRejected] = useState([]);
-  const [tab, setTab] = useState("Pending"); // Pending | Approved | Rejected | Mentors | Mentor Requests | Settings
+  const [tab, setTab] = useState("Pending"); // Pending | Approved | Rejected | Mentors | Mentor Requests | Overview | Settings
   const [q, setQ] = useState("");
-  const [settings, setSettings] = useState({ name: "", address: "", contactEmail: "", logoUrl: "", isVerified: false });
+  const [settings, setSettings] = useState({
+    name: "", address: "", contactEmail: "", logoUrl: "", isVerified: false,
+    establishmentYear: "", vision: "", history: "",
+    founders: [], trustees: [], photos: [], alumni: [], recognitions: []
+  });
   const [saving, setSaving] = useState(false);
   const [modal, setModal] = useState({ open: false, id: null, action: null, remarks: "" });
   const [detail, setDetail] = useState({ open: false, id: null, loading: false, data: null });
@@ -41,10 +45,33 @@ export default function SchoolDashboard() {
     if (schRes.ok) setSettings(((await schRes.json()).school) || settings);
   }
 
+  // Initialize tab from query param (e.g., /school?tab=Overview)
+  useEffect(() => {
+    try {
+      const usp = new URLSearchParams(window.location.search);
+      const t = usp.get("tab");
+      if (t && ["Pending","Approved","Rejected","Mentors","Mentor Requests","Overview","Settings"].includes(t)) {
+        setTab(t);
+      }
+    } catch (_) { /* noop */ }
+  }, []);
+
   useEffect(()=>{ load(); }, []);
   useEffect(()=>{
     if (tab === 'Mentors') fetchMentors();
     if (tab === 'Mentor Requests') fetchMentorRequests();
+  }, [tab]);
+
+  // Keep URL in sync with current tab (shallow)
+  useEffect(() => {
+    try {
+      const usp = new URLSearchParams(window.location.search);
+      if (usp.get("tab") !== tab) {
+        usp.set("tab", tab);
+        const url = `${window.location.pathname}?${usp.toString()}`;
+        window.history.replaceState({}, "", url);
+      }
+    } catch (_) { /* noop */ }
   }, [tab]);
   useEffect(() => {
     if (!token) window.location.href = "/admin/login";
@@ -90,6 +117,43 @@ export default function SchoolDashboard() {
       setSettings(data.school || settings);
     }
     setSaving(false);
+  }
+
+  async function saveOverview(e) {
+    e.preventDefault();
+    setSaving(true);
+    const payload = {
+      establishmentYear: settings.establishmentYear || undefined,
+      vision: settings.vision || "",
+      history: settings.history || "",
+      founders: settings.founders || [],
+      trustees: settings.trustees || [],
+      photos: settings.photos || [],
+      alumni: settings.alumni || [],
+      recognitions: settings.recognitions || [],
+    };
+    const res = await fetch(`${API}/school/update`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setSettings(s => ({ ...s, ...(data.school || {}) }));
+    }
+    setSaving(false);
+  }
+
+  async function removeStudent(id) {
+    if (!id) return;
+    if (!confirm('Remove this student permanently? This will blacklist their email/phone and cannot be undone.')) return;
+    const res = await fetch(`${API}/school/students/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    if (res.ok) {
+      load();
+    } else {
+      const err = await res.json().catch(()=>({}));
+      alert(err?.message || 'Failed to remove student');
+    }
   }
 
   // ===== Teachers/Mentors management =====
@@ -189,12 +253,15 @@ export default function SchoolDashboard() {
             {settings.isVerified && <span className="text-emerald-300 text-xs px-2 py-0.5 rounded-full border border-emerald-300">✔ Verified</span>}
           </div>
         </div>
-        <button onClick={()=>{localStorage.removeItem("adm_token");localStorage.removeItem("adm_role");window.location.href='/admin/login';}} className="btn-secondary px-3 py-2 rounded">Logout</button>
+        <div className="flex items-center gap-2">
+          <button onClick={()=>{ try { window.location.href = '/institution'; } catch(_) {} }} className="px-3 py-2 rounded bg-white/15 hover:bg-white/25" title="Institution">🏫 Institution</button>
+          <button onClick={()=>{localStorage.removeItem("adm_token");localStorage.removeItem("adm_role");window.location.href='/admin/login';}} className="btn-secondary px-3 py-2 rounded">Logout</button>
+        </div>
       </div>
 
       {/* Tabs */}
       <div className="glass-nav inline-flex rounded overflow-hidden mb-4">
-        {['Pending','Approved','Rejected','Mentors','Mentor Requests','Settings'].map(t => (
+        {['Pending','Approved','Rejected','Mentors','Mentor Requests','Overview','Settings'].map(t => (
           <button key={t} onClick={()=>setTab(t)} className={`px-4 py-2 ${tab===t? 'bg-white/30 text-white' : 'text-white/80'}`}>{t}
             {t==='Pending' ? ` (${pending.length})` : t==='Approved' ? ` (${approved.length})` : t==='Rejected' ? ` (${rejected.length})` : ''}
           </button>
@@ -208,11 +275,114 @@ export default function SchoolDashboard() {
         </div>
       )}
 
+      {tab === 'Overview' && (
+        <section>
+          <form onSubmit={saveOverview} className="grid gap-4 md:grid-cols-2">
+            <div className="glass-card p-4 rounded-xl space-y-3">
+              <div>
+                <label className="block text-sm mb-1">Establishment Year</label>
+                <input type="number" className="frost-input input-dark px-3 py-2 rounded border w-full" value={settings.establishmentYear || ''} onChange={(e)=>setSettings({...settings, establishmentYear: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-sm mb-1">Vision</label>
+                <textarea rows={3} className="frost-input input-dark px-3 py-2 rounded border w-full" value={settings.vision || ''} onChange={(e)=>setSettings({...settings, vision: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-sm mb-1">History</label>
+                <textarea rows={6} className="frost-input input-dark px-3 py-2 rounded border w-full" value={settings.history || ''} onChange={(e)=>setSettings({...settings, history: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-sm mb-1">School Photos</label>
+                <div className="space-y-2">
+                  {(settings.photos||[]).map((p,idx)=> (
+                    <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                      <input className="col-span-6 frost-input input-dark px-3 py-2 rounded border w-full" placeholder="Image URL" value={p.url||''} onChange={e=>{
+                        const arr=[...(settings.photos||[])]; arr[idx] = { ...(arr[idx]||{}), url: e.target.value }; setSettings({...settings, photos: arr});
+                      }} />
+                      <input className="col-span-5 frost-input input-dark px-3 py-2 rounded border w-full" placeholder="Caption" value={p.caption||''} onChange={e=>{
+                        const arr=[...(settings.photos||[])]; arr[idx] = { ...(arr[idx]||{}), caption: e.target.value }; setSettings({...settings, photos: arr});
+                      }} />
+                      <button type="button" onClick={()=>{ const arr=[...(settings.photos||[])]; arr.splice(idx,1); setSettings({...settings, photos: arr}); }} className="col-span-1 px-2 py-2 rounded bg-rose-600/80">✕</button>
+                    </div>
+                  ))}
+                  <button type="button" onClick={()=> setSettings({...settings, photos:[...(settings.photos||[]), { url:'', caption:'' }]})} className="px-3 py-2 rounded bg-white/15">+ Add Photo</button>
+                </div>
+              </div>
+            </div>
+
+            <div className="glass-card p-4 rounded-xl space-y-4">
+              <div>
+                <div className="flex items-center justify-between mb-2"><label className="text-sm">Founder(s)</label><button type="button" onClick={()=> setSettings({...settings, founders:[...(settings.founders||[]), { name:'', title:'', photoUrl:'', bio:'' }]})} className="px-2 py-1 rounded bg-white/15 text-xs">+ Add Founder</button></div>
+                <div className="space-y-2">
+                  {(settings.founders||[]).map((f,idx)=> (
+                    <div key={idx} className="grid grid-cols-12 gap-2">
+                      <input className="col-span-3 frost-input input-dark px-2 py-2 rounded border w-full" placeholder="Name" value={f.name||''} onChange={e=>{ const arr=[...(settings.founders||[])]; arr[idx]={...(arr[idx]||{}), name:e.target.value}; setSettings({...settings, founders: arr}); }} />
+                      <input className="col-span-3 frost-input input-dark px-2 py-2 rounded border w-full" placeholder="Title" value={f.title||''} onChange={e=>{ const arr=[...(settings.founders||[])]; arr[idx]={...(arr[idx]||{}), title:e.target.value}; setSettings({...settings, founders: arr}); }} />
+                      <input className="col-span-5 frost-input input-dark px-2 py-2 rounded border w-full" placeholder="Photo URL" value={f.photoUrl||''} onChange={e=>{ const arr=[...(settings.founders||[])]; arr[idx]={...(arr[idx]||{}), photoUrl:e.target.value}; setSettings({...settings, founders: arr}); }} />
+                      <button type="button" onClick={()=>{ const arr=[...(settings.founders||[])]; arr.splice(idx,1); setSettings({...settings, founders: arr}); }} className="col-span-1 px-2 py-2 rounded bg-rose-600/80">✕</button>
+                      <textarea rows={2} className="col-span-12 frost-input input-dark px-2 py-2 rounded border w-full" placeholder="Short bio (optional)" value={f.bio||''} onChange={e=>{ const arr=[...(settings.founders||[])]; arr[idx]={...(arr[idx]||{}), bio:e.target.value}; setSettings({...settings, founders: arr}); }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-2"><label className="text-sm">Trustee(s)</label><button type="button" onClick={()=> setSettings({...settings, trustees:[...(settings.trustees||[]), { name:'', title:'', photoUrl:'', bio:'' }]})} className="px-2 py-1 rounded bg-white/15 text-xs">+ Add Trustee</button></div>
+                <div className="space-y-2">
+                  {(settings.trustees||[]).map((f,idx)=> (
+                    <div key={idx} className="grid grid-cols-12 gap-2">
+                      <input className="col-span-3 frost-input input-dark px-2 py-2 rounded border w-full" placeholder="Name" value={f.name||''} onChange={e=>{ const arr=[...(settings.trustees||[])]; arr[idx]={...(arr[idx]||{}), name:e.target.value}; setSettings({...settings, trustees: arr}); }} />
+                      <input className="col-span-3 frost-input input-dark px-2 py-2 rounded border w-full" placeholder="Title" value={f.title||''} onChange={e=>{ const arr=[...(settings.trustees||[])]; arr[idx]={...(arr[idx]||{}), title:e.target.value}; setSettings({...settings, trustees: arr}); }} />
+                      <input className="col-span-5 frost-input input-dark px-2 py-2 rounded border w-full" placeholder="Photo URL" value={f.photoUrl||''} onChange={e=>{ const arr=[...(settings.trustees||[])]; arr[idx]={...(arr[idx]||{}), photoUrl:e.target.value}; setSettings({...settings, trustees: arr}); }} />
+                      <button type="button" onClick={()=>{ const arr=[...(settings.trustees||[])]; arr.splice(idx,1); setSettings({...settings, trustees: arr}); }} className="col-span-1 px-2 py-2 rounded bg-rose-600/80">✕</button>
+                      <textarea rows={2} className="col-span-12 frost-input input-dark px-2 py-2 rounded border w-full" placeholder="Short bio (optional)" value={f.bio||''} onChange={e=>{ const arr=[...(settings.trustees||[])]; arr[idx]={...(arr[idx]||{}), bio:e.target.value}; setSettings({...settings, trustees: arr}); }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-2"><label className="text-sm">Famous Alumni</label><button type="button" onClick={()=> setSettings({...settings, alumni:[...(settings.alumni||[]), { name:'', year:'', achievement:'', photoUrl:'' }]})} className="px-2 py-1 rounded bg-white/15 text-xs">+ Add Alumni</button></div>
+                <div className="space-y-2">
+                  {(settings.alumni||[]).map((a,idx)=> (
+                    <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                      <input className="col-span-3 frost-input input-dark px-2 py-2 rounded border w-full" placeholder="Name" value={a.name||''} onChange={e=>{ const arr=[...(settings.alumni||[])]; arr[idx]={...(arr[idx]||{}), name:e.target.value}; setSettings({...settings, alumni: arr}); }} />
+                      <input type="number" className="col-span-2 frost-input input-dark px-2 py-2 rounded border w-full" placeholder="Year" value={a.year||''} onChange={e=>{ const arr=[...(settings.alumni||[])]; arr[idx]={...(arr[idx]||{}), year:Number(e.target.value)||''}; setSettings({...settings, alumni: arr}); }} />
+                      <input className="col-span-4 frost-input input-dark px-2 py-2 rounded border w-full" placeholder="Achievement" value={a.achievement||''} onChange={e=>{ const arr=[...(settings.alumni||[])]; arr[idx]={...(arr[idx]||{}), achievement:e.target.value}; setSettings({...settings, alumni: arr}); }} />
+                      <input className="col-span-2 frost-input input-dark px-2 py-2 rounded border w-full" placeholder="Photo URL" value={a.photoUrl||''} onChange={e=>{ const arr=[...(settings.alumni||[])]; arr[idx]={...(arr[idx]||{}), photoUrl:e.target.value}; setSettings({...settings, alumni: arr}); }} />
+                      <button type="button" onClick={()=>{ const arr=[...(settings.alumni||[])]; arr.splice(idx,1); setSettings({...settings, alumni: arr}); }} className="col-span-1 px-2 py-2 rounded bg-rose-600/80">✕</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-2"><label className="text-sm">Recognitions & Awards</label><button type="button" onClick={()=> setSettings({...settings, recognitions:[...(settings.recognitions||[]), { title:'', issuer:'', level:'District', year:'', description:'' }]})} className="px-2 py-1 rounded bg-white/15 text-xs">+ Add Award</button></div>
+                <div className="space-y-2">
+                  {(settings.recognitions||[]).map((r,idx)=> (
+                    <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                      <input className="col-span-3 frost-input input-dark px-2 py-2 rounded border w-full" placeholder="Title" value={r.title||''} onChange={e=>{ const arr=[...(settings.recognitions||[])]; arr[idx]={...(arr[idx]||{}), title:e.target.value}; setSettings({...settings, recognitions: arr}); }} />
+                      <input className="col-span-3 frost-input input-dark px-2 py-2 rounded border w-full" placeholder="Issuer" value={r.issuer||''} onChange={e=>{ const arr=[...(settings.recognitions||[])]; arr[idx]={...(arr[idx]||{}), issuer:e.target.value}; setSettings({...settings, recognitions: arr}); }} />
+                      <select className="col-span-2 frost-input input-dark px-2 py-2 rounded border w-full" value={r.level||'District'} onChange={e=>{ const arr=[...(settings.recognitions||[])]; arr[idx]={...(arr[idx]||{}), level:e.target.value}; setSettings({...settings, recognitions: arr}); }} >
+                        {['District','State','National','International'].map(l=> <option key={l} value={l}>{l}</option>)}
+                      </select>
+                      <input type="number" className="col-span-2 frost-input input-dark px-2 py-2 rounded border w-full" placeholder="Year" value={r.year||''} onChange={e=>{ const arr=[...(settings.recognitions||[])]; arr[idx]={...(arr[idx]||{}), year:Number(e.target.value)||''}; setSettings({...settings, recognitions: arr}); }} />
+                      <button type="button" onClick={()=>{ const arr=[...(settings.recognitions||[])]; arr.splice(idx,1); setSettings({...settings, recognitions: arr}); }} className="col-span-2 px-2 py-2 rounded bg-rose-600/80">Remove</button>
+                      <textarea rows={2} className="col-span-12 frost-input input-dark px-2 py-2 rounded border w-full" placeholder="Description (optional)" value={r.description||''} onChange={e=>{ const arr=[...(settings.recognitions||[])]; arr[idx]={...(arr[idx]||{}), description:e.target.value}; setSettings({...settings, recognitions: arr}); }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="pt-2">
+                <button disabled={saving} className="btn-primary px-4 py-2 rounded">{saving? 'Saving…' : 'Save Overview'}</button>
+              </div>
+            </div>
+          </form>
+        </section>
+      )}
+
       {(tab === 'Mentors') && (
         <div className="mb-4 flex items-center gap-2">
           <input value={tQ} onChange={(e)=>setTQ(e.target.value)} placeholder={'Search mentors'} className="frost-input input-dark px-3 py-2 rounded border w-full max-w-sm" />
           <button onClick={fetchMentors} className="btn-primary px-3 py-2 rounded">Search</button>
-          <button onClick={()=>{ setShowAddPwd(false); setTAdd(s=>({ ...s, open: true })); }} className="btn-secondary px-3 py-2 rounded">Add Mentor</button>
+          {/* Add Mentor removed: mentors can only be added from Institution → Teachers */}
         </div>
       )}
 
@@ -245,9 +415,17 @@ export default function SchoolDashboard() {
           <div className="grid gap-4 md:grid-cols-2">
             {approved.map((s) => (
               <div key={s._id} className="glass-card p-4 rounded-xl">
-                <div className="font-medium">{s.name}</div>
-                <div className="text-sm opacity-80">{s.email} • {s.department} • {s.admissionYear} • {s.status}</div>
-                <div className="text-xs opacity-80">Roll: {s.rollNumber}</div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-medium">{s.name}</div>
+                    <div className="text-sm opacity-80">{s.email} • {s.department} • {s.admissionYear} • {s.status}</div>
+                    <div className="text-xs opacity-80">Roll: {s.rollNumber}</div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={()=>openDetails(s._id)} className="px-3 py-2 rounded bg-white/20 hover:bg-white/30">View</button>
+                    <button onClick={()=>removeStudent(s._id)} className="px-3 py-2 rounded bg-red-600 text-white">Remove</button>
+                  </div>
+                </div>
               </div>
             ))}
             {!approved.length && <div className="opacity-80">No approved students</div>}
@@ -276,7 +454,9 @@ export default function SchoolDashboard() {
         <section>
           {tLoading && <div>Loading...</div>}
           {!tLoading && (
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-3">
+              {/* Per requirement: mentor creation moved to Institution > Teachers. Remove inline add here. */}
+              <div className="text-white/70 text-sm">Mentors are managed under Institution • Teachers</div>
               {teachers.map(t => (
                 <div key={t._id} className="glass-card p-4 rounded-xl">
                   <div className="flex items-center justify-between">

@@ -1,11 +1,8 @@
 import React, { useMemo, useState } from "react";
-import axios from "axios";
-import { Link } from "react-router-dom";
+import api from "./utils/apiClient";
+import { useNavigate } from "react-router-dom";
 
-const API = axios.create({
-  baseURL: import.meta.env?.VITE_API_BASE_URL || "http://localhost:5000/api",
-  withCredentials: true,
-});
+const API = api;
 
 const grades = [
   "Class 1","Class 2","Class 3","Class 4","Class 5",
@@ -34,6 +31,10 @@ function strength(pw) {
 }
 
 export default function SignupPage() {
+  // Landing and modal state
+  const [showLanding, setShowLanding] = useState(true);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const navigate = useNavigate();
   const [step, setStep] = useState(1);
 
   // Identity
@@ -62,7 +63,9 @@ export default function SignupPage() {
   const [phoneVerified, setPhoneVerified] = useState(false);
 
   // Academic
-  const [grade, setGrade] = useState("");
+  const [grade, setGrade] = useState(""); // optional; sent as department
+  const [classLevel, setClassLevel] = useState("");
+  const [section, setSection] = useState("");
   const [rollNumber, setRollNumber] = useState("");
   const [admissionYear, setAdmissionYear] = useState("");
   const currentYear = new Date().getFullYear();
@@ -79,12 +82,9 @@ export default function SignupPage() {
   const pwScore = strength(password);
   const pwLabel = ["Very weak","Weak","Okay","Good","Strong"][Math.max(0, pwScore - 1)] || "Very weak";
 
-  // Minor/guardian
+  // Parent details (guardian section removed)
   const age = useMemo(() => ageFromDob(dob), [dob]);
-  const isMinor = age !== null && age < 18;
-  const [guardianConsent, setGuardianConsent] = useState(false);
-  const [guardianPhone, setGuardianPhone] = useState("");
-  const [guardianEmail, setGuardianEmail] = useState("");
+  const [parentName, setParentName] = useState("");
 
   // Submit
   const [submitting, setSubmitting] = useState(false);
@@ -123,9 +123,7 @@ export default function SignupPage() {
     }
   }
 
-  function onDigiLockerFallback() {
-    window.location.href = `${API.defaults.baseURL.replace(/\/$/, "")}/identity/digilocker/start`;
-  }
+  // DigiLocker verification is not required for student signup; removed fallback.
 
   function canGoStep2() {
     return Boolean(name && dob && aadhaarToken && aadhaarLast4);
@@ -134,10 +132,9 @@ export default function SignupPage() {
     return emailVerified && phoneVerified;
   }
   function canSubmit() {
-    if (!grade || !rollNumber || !admissionYear || !schoolCode) return false;
+    if (!parentName || !classLevel || !section || !admissionYear || !schoolCode) return false;
     if (!termsAccepted || !captchaChecked) return false;
     if (!password || password !== password2 || pwScore < 3) return false;
-    if (isMinor && (!guardianConsent || !guardianPhone || !guardianEmail)) return false;
     return true;
   }
 
@@ -202,11 +199,13 @@ export default function SignupPage() {
       setSubmitting(true);
       const { data } = await API.post("/portal/students/signup", {
         name,
+        parentName,
         email,
         phone,
         password,
-        rollNumber,
         department: grade,
+        classLevel,
+        section,
         admissionYear: admissionYear ? parseInt(admissionYear, 10) : undefined,
         schoolCode,
         aadhaarNumber: aadhaarLast4 ? `**** **** ${aadhaarLast4}` : undefined,
@@ -223,8 +222,10 @@ export default function SignupPage() {
           email: "Email",
           phone: "Phone",
           password: "Password",
-          rollNumber: "Roll Number",
           department: "Grade/Class",
+          parentName: "Parent Name",
+          classLevel: "Class Level",
+          section: "Section",
           admissionYear: "Admission Year",
           schoolIdOrCode: "School",
           schoolCode: "School Code",
@@ -247,41 +248,143 @@ export default function SignupPage() {
     })();
   }, []);
 
-  return (
-    <div className="min-h-screen scenic-bg">
-      {/* Top glass navbar */}
-      <div className="mx-auto max-w-6xl px-4 pt-6">
-        <div className="glass-nav flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-full bg-white/80 flex items-center justify-center font-bold text-indigo-600">O</div>
-            <span className="text-white/90 font-semibold">OurApp</span>
-          </div>
-          <nav className="hidden md:flex items-center gap-6 text-white/90">
-            <a className="hover:text-white" href="#">Home</a>
-            <a className="hover:text-white" href="#">Service</a>
-            <a className="hover:text-white" href="#">Contact</a>
-            <a className="hover:text-white" href="#">About</a>
-            <div className="glass-nav flex items-center gap-2 px-3 py-1 text-sm">
-              <span>Search</span>
-              <span className="opacity-70">⌘K</span>
-            </div>
-            <Link to="/admin/login" className="ml-2 bg-white/80 text-indigo-700 hover:bg-white text-sm px-3 py-1 rounded-lg">Admin Login</Link>
-          </nav>
-          <div className="md:hidden text-white/90">☰</div>
-        </div>
-      </div>
+  // Colors inspired by reference (green buttermilk pack)
+  // primary: fresh green, dark: deep leaf, light: soft cream
+  const theme = {
+    primary: "#6fbe44",
+    dark: "#2e7d32",
+    light: "#f3f8ed",
+  };
 
-      {/* Centered glass card */}
-      <div className="flex items-center justify-center px-4 py-10">
-        <div className="w-full max-w-4xl glass-card p-6">
-          <h2 className="text-2xl font-bold text-white text-center">Sign Up</h2>
-          <p className="text-center text-white/80 mb-4">
-            Already a member? <Link to="/login" className="underline">Student Log In</Link>
-            <span className="mx-2">•</span>
-            <Link to="/mentor/login" className="underline">Mentor Login</Link>
-            <span className="mx-2">•</span>
-            <Link to="/admin/login" className="underline">Admin Login</Link>
-          </p>
+  // LANDING VIEW -----------------------------------------------------------
+  if (showLanding) {
+    return (
+      <div className="min-h-screen flex flex-col" style={{ background: `linear-gradient(180deg, ${theme.light} 0%, #e7f4d9 30%, ${theme.primary} 100%)` }}>
+        {/* Logo top-left */}
+        <div className="p-4">
+          <img src="/logo.png" alt="App logo" className="h-10 w-auto drop-shadow" />
+        </div>
+
+        {/* Centered CTA */}
+        <div className="flex-1 flex items-center justify-center px-4">
+          <div className="w-full max-w-xl text-center">
+            <h1 className="text-3xl sm:text-4xl font-bold text-[#1f3a1f] mb-6">Welcome</h1>
+            <p className="text-[#2f4f2f]/80 mb-8">Join the network or sign in to continue.</p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button
+                onClick={() => setShowLanding(false)}
+                className="px-6 py-3 rounded-xl text-white shadow-md transition-transform duration-200 ease-out hover:scale-[1.03] hover:shadow-lg active:scale-100 focus:outline-none focus:ring-2 focus:ring-[#2e7d32]"
+                style={{ backgroundColor: theme.dark }}
+              >
+                Signup
+              </button>
+              <button
+                onClick={() => setShowLoginModal(true)}
+                className="px-6 py-3 rounded-xl border shadow-md transition-transform duration-200 ease-out hover:scale-[1.03] hover:shadow-lg active:scale-100 focus:outline-none focus:ring-2 focus:ring-[#2e7d32]"
+                style={{ borderColor: theme.dark, color: theme.dark, backgroundColor: "#ffffff" }}
+              >
+                Login
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Login modal */}
+        {showLoginModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            aria-modal="true" role="dialog"
+          >
+            <div className="absolute inset-0 bg-black/40" onClick={() => setShowLoginModal(false)} />
+            {/* Back button (top-left) to close modal and return */}
+            <button
+              onClick={() => setShowLoginModal(false)}
+              aria-label="Back"
+              className="fixed left-4 top-4 h-10 w-10 rounded-full bg-white/95 text-[#1f3a1f] shadow hover:bg-white focus:outline-none focus:ring-2 focus:ring-[#2e7d32] flex items-center justify-center"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+                <path d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <div className="relative w-full max-w-md rounded-2xl p-6 shadow-xl bg-white/20 backdrop-blur-xl border border-white/30">
+              <button
+                onClick={() => setShowLoginModal(false)}
+                className="absolute right-3 top-3 text-gray-500 hover:text-gray-700"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+              <h2 className="text-xl font-semibold mb-4" style={{ color: theme.dark }}>Choose login type</h2>
+              <div className="grid grid-cols-1 gap-3">
+                <button
+                  onClick={() => { setShowLoginModal(false); navigate("/login/server"); }}
+                  className="w-full px-4 py-2 rounded-lg transition-transform duration-200 ease-out hover:scale-105 hover:shadow-lg focus:scale-105 active:scale-100 backdrop-blur-md"
+                  title="Login as Server Admin"
+                  style={{ border: `1px solid ${theme.dark}`, color: theme.dark, backgroundColor: "rgba(255,255,255,0.5)" }}
+                >
+                  Server Admin
+                </button>
+                <button
+                  onClick={() => { setShowLoginModal(false); navigate("/login/school"); }}
+                  className="w-full px-4 py-2 rounded-lg transition-transform duration-200 ease-out hover:scale-105 hover:shadow-lg focus:scale-105 active:scale-100 backdrop-blur-md"
+                  title="Login as School Admin"
+                  style={{ border: `1px solid ${theme.dark}`, color: theme.dark, backgroundColor: "rgba(255,255,255,0.5)" }}
+                >
+                  School Admin
+                </button>
+                {/* Teacher login (uses existing Mentor login route) */}
+                <button
+                  onClick={() => { setShowLoginModal(false); navigate("/mentor/login"); }}
+                  className="w-full px-4 py-2 rounded-lg transition-transform duration-200 ease-out hover:scale-105 hover:shadow-lg focus:scale-105 active:scale-100 backdrop-blur-md"
+                  title="Login as Teacher"
+                  style={{ border: `1px solid ${theme.dark}`, color: theme.dark, backgroundColor: "rgba(255,255,255,0.5)" }}
+                >
+                  Teacher
+                </button>
+                {/* Mentor login removed; all academic staff managed under Teachers module */}
+                <button
+                  onClick={() => { setShowLoginModal(false); navigate("/sponsor/login"); }}
+                  className="w-full px-4 py-2 rounded-lg transition-transform duration-200 ease-out hover:scale-105 hover:shadow-lg focus:scale-105 active:scale-100 backdrop-blur-md"
+                  title="Login as Sponsor"
+                  style={{ border: `1px solid ${theme.dark}`, color: theme.dark, backgroundColor: "rgba(255,255,255,0.5)" }}
+                >
+                  Sponsor
+                </button>
+                <button
+                  onClick={() => { setShowLoginModal(false); navigate("/login"); }}
+                  className="w-full px-4 py-2 rounded-lg transition-transform duration-200 ease-out hover:scale-105 hover:shadow-lg focus:scale-105 active:scale-100 backdrop-blur-md"
+                  title="Login as Student"
+                  style={{ border: `1px solid ${theme.dark}`, color: theme.dark, backgroundColor: "rgba(255,255,255,0.5)" }}
+                >
+                  Student
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // SIGNUP FORM VIEW -------------------------------------------------------
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4 py-10" style={{ background: `linear-gradient(180deg, ${theme.light} 0%, #e7f4d9 30%, ${theme.primary} 100%)` }}>
+      {/* Back to landing */}
+      <button
+        onClick={() => setShowLanding(true)}
+        aria-label="Back to landing"
+        className="fixed left-4 top-4 z-50 h-10 w-10 rounded-full bg-white/95 text-[#1f3a1f] shadow hover:bg-white focus:outline-none focus:ring-2 focus:ring-[#2e7d32] flex items-center justify-center"
+        title="Back"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+          <path d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+      {/* Centered signup card */}
+      <div className="w-full max-w-lg rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.2)] bg-white/90 p-6 ring-1 ring-black/5">
+
+          {/* Title */}
+          <h2 className="text-[22px] font-bold text-[#1f3a1f] text-center mb-3">Sign Up</h2>
 
           {pendingBadge && (
             <div className="mb-4 p-3 rounded border border-yellow-300 bg-yellow-50 text-yellow-800">
@@ -292,7 +395,17 @@ export default function SignupPage() {
           {/* Stepper */}
           <div className="flex gap-2 justify-center mb-6">
             {["Identity","Contact","Academic","Security"].map((label, idx) => (
-              <div key={label} className={`px-3 py-1 rounded border text-sm ${step === idx+1 ? "bg-white/80 text-gray-800 border-white/70" : "bg-white/30 text-white border-white/40"}`}>
+              <div
+                key={label}
+                className={`px-3 py-1 rounded border text-sm ${step === idx+1 ? "bg-[var(--chip-on)] text-[#1f3a1f] border-[color:var(--chip-on-b)]" : "bg-[var(--chip-off)] text-[#1f3a1f]/70 border-[color:var(--chip-off-b)]"}`}
+                style={{
+                  // chip colors tuned to the green palette
+                  ['--chip-on']: '#e8f5e9',
+                  ['--chip-on-b']: '#c8e6c9',
+                  ['--chip-off']: '#f6fbf2',
+                  ['--chip-off-b']: '#e8f5e9',
+                }}
+              >
                 {idx+1}. {label}
               </div>
             ))}
@@ -301,59 +414,68 @@ export default function SignupPage() {
           <form onSubmit={onSubmit} className="space-y-6">
           {step === 1 && (
             <section>
-              <h3 className="font-semibold mb-3">Step 1: Identity</h3>
+              <h3 className="font-semibold mb-3 text-[#1f3a1f]">Step 1: Identity</h3>
               <div className="mb-3">
-                <label htmlFor="aadhaar" className="block text-sm font-medium text-white/90">Aadhaar Number</label>
+                <label htmlFor="aadhaar" className="block text-sm font-medium text-[#1f3a1f]/90">Aadhaar Number</label>
                 <input
                   id="aadhaar"
                   type="text"
                   inputMode="numeric"
                   value={aadhaar}
                   onChange={(e) => setAadhaar(e.target.value.replace(/\D/g, '').slice(0,12))}
-                  className="mt-1 w-full px-3 py-2 border rounded frost-input input-dark"
+                  className="mt-1 w-full px-3 py-2 border rounded bg-white text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-[#2e7d32] focus:border-[#2e7d32]"
                   placeholder="12-digit Aadhaar"
                   disabled={verifyingAadhaar}
                 />
                 {aadhaarErr && <p className="text-red-600 text-sm mt-1">{aadhaarErr}</p>}
               </div>
               <div className="flex gap-2 mb-3">
-                <button type="button" onClick={onVerifyAadhaar} disabled={!aadhaarValid || verifyingAadhaar} className="px-4 py-2 btn-primary rounded disabled:opacity-50">
+                <button type="button" onClick={onVerifyAadhaar} disabled={!aadhaarValid || verifyingAadhaar} className="px-4 py-2 rounded text-white disabled:opacity-50" style={{ backgroundColor: theme.dark }}>
                   {verifyingAadhaar ? "Verifying..." : "Verify Aadhaar"}
-                </button>
-                <button type="button" onClick={onDigiLockerFallback} className="px-4 py-2 bg-white/70 rounded">
-                  Verify via DigiLocker
                 </button>
               </div>
 
               <div className="mb-3">
-                <label htmlFor="name" className="block text-sm font-medium text-white/90">Full Name (from Aadhaar)</label>
-                <input id="name" type="text" value={name} readOnly className="mt-1 w-full px-3 py-2 border rounded bg-white/70" />
-                <p className="text-xs text-white/80 mt-1">Name becomes read-only after verification.</p>
+                <label htmlFor="name" className="block text-sm font-medium text-[#1f3a1f]/90">Full Name (from Aadhaar)</label>
+                <input id="name" type="text" value={name} readOnly className="mt-1 w-full px-3 py-2 border rounded bg-white text-slate-800" />
+                <p className="text-xs text-[#1f3a1f]/60 mt-1">Name becomes read-only after verification.</p>
               </div>
               <div className="mb-3">
-                <label htmlFor="dob" className="block text-sm font-medium text-white/90">Date of Birth</label>
-                <input id="dob" type="date" value={dob ? dob.substring(0,10) : ''} readOnly className="mt-1 w-full px-3 py-2 border rounded bg-white/70" />
-                <p className="text-xs text-white/80 mt-1">Auto-filled from Aadhaar/DigiLocker.</p>
+                <label htmlFor="parentName" className="block text-sm font-medium text-[#1f3a1f]/90">Parent/Guardian Name</label>
+                <input id="parentName" type="text" value={parentName} onChange={(e)=>setParentName(e.target.value)} className="mt-1 w-full px-3 py-2 border rounded bg-white text-slate-800" />
               </div>
-              <button type="button" onClick={() => setStep(2)} disabled={!canGoStep2()} className="px-4 py-2 btn-primary rounded disabled:opacity-50">
-                Next
-              </button>
+              <div className="mb-3">
+                <label htmlFor="dob" className="block text-sm font-medium text-[#1f3a1f]/90">Date of Birth</label>
+                <input id="dob" type="date" value={dob ? dob.substring(0,10) : ''} readOnly className="mt-1 w-full px-3 py-2 border rounded bg-white text-slate-800" />
+                <p className="text-xs text-[#1f3a1f]/60 mt-1">Auto-filled from Aadhaar verification.</p>
+              </div>
+              <div className="flex sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setStep(2)}
+                  disabled={!canGoStep2()}
+                  className="mt-2 sm:mt-0 px-4 py-2 rounded text-white disabled:opacity-50 w-full sm:w-auto"
+                  style={{ backgroundColor: theme.dark }}
+                >
+                  Next
+                </button>
+              </div>
             </section>
           )}
 
           {step === 2 && (
             <section>
-              <h3 className="font-semibold mb-3 text-white">Step 2: Contact</h3>
+              <h3 className="font-semibold mb-3 text-[#1f3a1f]">Step 2: Contact</h3>
               <div className="mb-3">
-                <label htmlFor="email" className="block text-sm font-medium text-white/90">Email</label>
-                <input id="email" type="email" value={email} onChange={(e)=>{ setEmail(e.target.value); setEmailVerified(false); }} className="mt-1 w-full px-3 py-2 border rounded frost-input input-dark" />
+                <label htmlFor="email" className="block text-sm font-medium text-[#1f3a1f]/90">Email</label>
+                <input id="email" type="email" value={email} onChange={(e)=>{ setEmail(e.target.value); setEmailVerified(false); }} className="mt-1 w-full px-3 py-2 border rounded bg-white text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-[#2e7d32] focus:border-[#2e7d32]" />
                 {!emailVerified && (
                   <div className="flex items-center gap-2 mt-2">
-                    <button type="button" onClick={sendEmailOtp} disabled={sendingEmailOtp} className="px-3 py-1 bg-white/70 rounded">
+                    <button type="button" onClick={sendEmailOtp} disabled={sendingEmailOtp} className="px-3 py-1 rounded border" style={{ borderColor: theme.dark, color: theme.dark, backgroundColor: "#fff" }}>
                       {sendingEmailOtp ? "Sending..." : "Send Email OTP"}
                     </button>
-                    <input aria-label="Email OTP" placeholder="Email OTP" value={emailOtp} onChange={(e)=>setEmailOtp(e.target.value)} className="px-2 py-1 border rounded frost-input input-dark" />
-                    <button type="button" onClick={verifyEmail} disabled={verifyingEmailOtp || !emailOtp} className="px-3 py-1 btn-primary rounded disabled:opacity-50">
+                    <input aria-label="Email OTP" placeholder="Email OTP" value={emailOtp} onChange={(e)=>setEmailOtp(e.target.value)} className="px-2 py-1 border rounded bg-white text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-[#2e7d32] focus:border-[#2e7d32]" />
+                    <button type="button" onClick={verifyEmail} disabled={verifyingEmailOtp || !emailOtp} className="px-3 py-1 rounded text-white disabled:opacity-50" style={{ backgroundColor: theme.dark }}>
                       {verifyingEmailOtp ? "Verifying..." : "Verify Email"}
                     </button>
                   </div>
@@ -363,55 +485,58 @@ export default function SignupPage() {
               </div>
 
               <div className="mb-3">
-                <label htmlFor="phone" className="block text-sm font-medium text-white/90">Phone</label>
-                <input id="phone" type="tel" inputMode="numeric" value={phone} onChange={(e)=>{ setPhone(e.target.value.replace(/\D/g,'').slice(0,10)); setPhoneVerified(false); }} className="mt-1 w-full px-3 py-2 border rounded frost-input input-dark" />
+                <label htmlFor="phone" className="block text-sm font-medium text-[#1f3a1f]/90">Phone</label>
+                <input id="phone" type="tel" inputMode="numeric" value={phone} onChange={(e)=>{ setPhone(e.target.value.replace(/\D/g,'').slice(0,10)); setPhoneVerified(false); }} className="mt-1 w-full px-3 py-2 border rounded bg-white text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-[#2e7d32] focus:border-[#2e7d32]" />
                 {!phoneVerified && (
                   <div className="flex items-center gap-2 mt-2">
-                    <button type="button" onClick={sendPhoneOtp} disabled={sendingPhoneOtp} className="px-3 py-1 bg-white/70 rounded">
+                    <button type="button" onClick={sendPhoneOtp} disabled={sendingPhoneOtp} className="px-3 py-1 rounded border" style={{ borderColor: theme.dark, color: theme.dark, backgroundColor: "#fff" }}>
                       {sendingPhoneOtp ? "Sending..." : "Send Phone OTP"}
                     </button>
-                    <input aria-label="Phone OTP" placeholder="Phone OTP" value={phoneOtp} onChange={(e)=>setPhoneOtp(e.target.value)} className="px-2 py-1 border rounded frost-input input-dark" />
-                    <button type="button" onClick={verifyPhone} disabled={verifyingPhoneOtp || !phoneOtp} className="px-3 py-1 btn-primary rounded disabled:opacity-50">
+                    <input aria-label="Phone OTP" placeholder="Phone OTP" value={phoneOtp} onChange={(e)=>setPhoneOtp(e.target.value)} className="px-2 py-1 border rounded bg-white text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-[#2e7d32] focus:border-[#2e7d32]" />
+                    <button type="button" onClick={verifyPhone} disabled={verifyingPhoneOtp || !phoneOtp} className="px-3 py-1 rounded text-white disabled:opacity-50" style={{ backgroundColor: theme.dark }}>
                       {verifyingPhoneOtp ? "Verifying..." : "Verify Phone"}
                     </button>
                   </div>
                 )}
                 {phoneErr && <p className="text-red-600 text-sm mt-1">{phoneErr}</p>}
-                {phoneVerified && <p className="text-green-200 text-sm mt-1">Phone verified</p>}
+                {phoneVerified && <p className="text-green-600 text-sm mt-1">Phone verified</p>}
               </div>
 
               <div className="flex gap-2">
-                <button type="button" onClick={()=>setStep(1)} className="px-4 py-2 bg-white/70 rounded">Back</button>
-                <button type="button" onClick={()=>setStep(3)} disabled={!canGoStep3()} className="px-4 py-2 btn-primary rounded disabled:opacity-50">Next</button>
+                <button type="button" onClick={()=>setStep(1)} className="px-4 py-2 rounded border" style={{ borderColor: theme.dark, color: theme.dark, backgroundColor: "#fff" }}>Back</button>
+                <button type="button" onClick={()=>setStep(3)} disabled={!canGoStep3()} className="px-4 py-2 rounded text-white disabled:opacity-50" style={{ backgroundColor: theme.dark }}>Next</button>
               </div>
             </section>
           )}
 
           {step === 3 && (
             <section>
-              <h3 className="font-semibold mb-3 text-white">Step 3: Academic</h3>
+              <h3 className="font-semibold mb-3 text-[#1f3a1f]">Step 3: Academic</h3>
               <div className="mb-3">
-                <label htmlFor="grade" className="block text-sm font-medium text-white/90">Grade/Class</label>
-                <select id="grade" value={grade} onChange={(e)=>setGrade(e.target.value)} className="mt-1 w-full px-3 py-2 border rounded bg-white text-slate-800">
-                  <option value="">Select grade</option>
-                  {grades.map((g)=> <option key={g} value={g}>{g}</option>)}
+                <label htmlFor="classLevel" className="block text-sm font-medium text-[#1f3a1f]/90">Class Level</label>
+                <select id="classLevel" value={classLevel} onChange={(e)=>setClassLevel(e.target.value)} className="mt-1 w-full px-3 py-2 border rounded bg-white text-slate-800">
+                  <option value="">Select class</option>
+                  {["LKG","UKG","1","2","3","4","5","6","7","8","9","10","11","12"].map((g)=> <option key={g} value={g}>{g}</option>)}
                 </select>
               </div>
               <div className="mb-3">
-                <label htmlFor="schoolCode" className="block text-sm font-medium text-white/90">Select School</label>
+                <label htmlFor="schoolCode" className="block text-sm font-medium text-[#1f3a1f]/90">Select School</label>
                 <select id="schoolCode" value={schoolCode} onChange={(e)=>setSchoolCode(e.target.value)} className="mt-1 w-full px-3 py-2 border rounded bg-white text-slate-800">
                   <option value="">Choose your school</option>
                   {schools.map((s)=> <option key={s.code} value={s.code}>{s.name} ({s.code})</option>)}
                 </select>
-                <p className="text-xs text-white/80 mt-1">Only registered schools are listed.</p>
+                <p className="text-xs text-[#1f3a1f]/60 mt-1">Only registered schools are listed.</p>
               </div>
               <div className="mb-3 grid md:grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor="rollNumber" className="block text-sm font-medium text-white/90">Roll Number</label>
-                  <input id="rollNumber" type="text" value={rollNumber} onChange={(e)=>setRollNumber(e.target.value)} className="mt-1 w-full px-3 py-2 border rounded frost-input input-dark" />
+                  <label htmlFor="section" className="block text-sm font-medium text-[#1f3a1f]/90">Section</label>
+                  <select id="section" value={section} onChange={(e)=>setSection(e.target.value)} className="mt-1 w-full px-3 py-2 border rounded bg-white text-slate-800">
+                    <option value="">Select section</option>
+                    {["A","B","C","D","E"].map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <label htmlFor="admissionYear" className="block text-sm font-medium text-white/90">Admission Year</label>
+                  <label htmlFor="admissionYear" className="block text-sm font-medium text-[#1f3a1f]/90">Admission Year</label>
                   <select id="admissionYear" value={admissionYear} onChange={(e)=>setAdmissionYear(e.target.value)} className="mt-1 w-full px-3 py-2 border rounded bg-white text-slate-800">
                     <option value="">Select year</option>
                     {years.map(y => <option key={y} value={y}>{y}</option>)}
@@ -419,55 +544,40 @@ export default function SignupPage() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <button type="button" onClick={()=>setStep(2)} className="px-4 py-2 bg-white/70 rounded">Back</button>
-                <button type="button" onClick={()=>setStep(4)} disabled={!grade || !schoolCode || !rollNumber || !admissionYear} className="px-4 py-2 btn-primary rounded disabled:opacity-50">Next</button>
+                <button type="button" onClick={()=>setStep(2)} className="px-4 py-2 rounded border" style={{ borderColor: theme.dark, color: theme.dark, backgroundColor: "#fff" }}>Back</button>
+                <button type="button" onClick={()=>setStep(4)} disabled={!classLevel || !section || !schoolCode || !admissionYear} className="px-4 py-2 rounded text-white disabled:opacity-50" style={{ backgroundColor: theme.dark }}>Next</button>
               </div>
             </section>
           )}
 
           {step === 4 && (
             <section>
-              <h3 className="font-semibold mb-3 text-white">Step 4: Security & Consents</h3>
+              <h3 className="font-semibold mb-3 text-[#1f3a1f]">Step 4: Security & Consents</h3>
               <div className="mb-3">
-                <label htmlFor="password" className="block text-sm font-medium text-white/90">Password</label>
+                <label htmlFor="password" className="block text-sm font-medium text-[#1f3a1f]/90">Password</label>
                 <div className="flex gap-2">
-                  <input id="password" type={showPw ? "text" : "password"} value={password} onChange={(e)=>setPassword(e.target.value)} className="mt-1 w-full px-3 py-2 border rounded frost-input input-dark" />
-                  <button type="button" onClick={()=>setShowPw(s=>!s)} className="px-3 py-2 bg-white/70 rounded">{showPw ? "Hide" : "Show"}</button>
+                  <input id="password" type={showPw ? "text" : "password"} value={password} onChange={(e)=>setPassword(e.target.value)} className="mt-1 w-full px-3 py-2 border rounded bg-white text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-[#2e7d32] focus:border-[#2e7d32]" />
+                  <button type="button" onClick={()=>setShowPw(s=>!s)} className="px-3 py-2 rounded border" style={{ borderColor: theme.dark, color: theme.dark, backgroundColor: "#fff" }}>{showPw ? "Hide" : "Show"}</button>
                 </div>
-                <p className="text-xs text-white/80 mt-1">Strength: {pwLabel} ({pwScore}/5)</p>
+                <p className="text-xs text-[#1f3a1f]/60 mt-1">Strength: {pwLabel} ({pwScore}/5)</p>
               </div>
               <div className="mb-3">
-                <label htmlFor="password2" className="block text-sm font-medium text-white/90">Confirm Password</label>
-                <input id="password2" type={showPw ? "text" : "password"} value={password2} onChange={(e)=>setPassword2(e.target.value)} className="mt-1 w-full px-3 py-2 border rounded frost-input input-dark" />
+                <label htmlFor="password2" className="block text-sm font-medium text-[#1f3a1f]/90">Confirm Password</label>
+                <input id="password2" type={showPw ? "text" : "password"} value={password2} onChange={(e)=>setPassword2(e.target.value)} className="mt-1 w-full px-3 py-2 border rounded bg-white text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-[#2e7d32] focus:border-[#2e7d32]" />
                 {password2 && password !== password2 && (<p className="text-red-600 text-sm mt-1">Passwords do not match</p>)}
               </div>
 
-              {isMinor && (
-                <div className="border rounded p-3 mb-3">
-                  <div className="mb-2">
-                    <input id="guardianConsent" type="checkbox" checked={guardianConsent} onChange={(e)=>setGuardianConsent(e.target.checked)} />
-                    <label htmlFor="guardianConsent" className="ml-2">I am a guardian and consent to account creation</label>
-                  </div>
-                  <div className="mb-2">
-                    <label htmlFor="guardianPhone" className="block text-sm font-medium text-white/90">Guardian Phone</label>
-                    <input id="guardianPhone" type="tel" value={guardianPhone} onChange={(e)=>setGuardianPhone(e.target.value.replace(/\D/g,'').slice(0,10))} className="mt-1 w-full px-3 py-2 border rounded frost-input input-dark" />
-                  </div>
-                  <div>
-                    <label htmlFor="guardianEmail" className="block text-sm font-medium text-white/90">Guardian Email</label>
-                    <input id="guardianEmail" type="email" value={guardianEmail} onChange={(e)=>setGuardianEmail(e.target.value)} className="mt-1 w-full px-3 py-2 border rounded frost-input input-dark" />
-                  </div>
-                </div>
-              )}
+              {/* Guardian section removed as per requirements */}
 
               <div className="mb-3">
                 <input id="terms" type="checkbox" checked={termsAccepted} onChange={(e)=>setTermsAccepted(e.target.checked)} />
-                <label htmlFor="terms" className="ml-2 text-white/90">I accept the Terms of Use and Privacy Policy</label>
+                <label htmlFor="terms" className="ml-2 text-[#1f3a1f]/90">I accept the Terms of Use and Privacy Policy</label>
               </div>
 
               <div className="mb-3">
                 <input id="captcha" type="checkbox" checked={captchaChecked} onChange={(e)=>setCaptchaChecked(e.target.checked)} />
-                <label htmlFor="captcha" className="ml-2 text-white/90">I am not a bot</label>
-                <p className="text-xs text-white/80">Replace with real CAPTCHA in production.</p>
+                <label htmlFor="captcha" className="ml-2 text-[#1f3a1f]/90">I am not a bot</label>
+                <p className="text-xs text-[#1f3a1f]/60">Replace with real CAPTCHA in production.</p>
               </div>
 
               {formErr && <div className="text-red-600 mb-2">
@@ -480,28 +590,16 @@ export default function SignupPage() {
               </div>}
 
               <div className="flex gap-2">
-                <button type="button" onClick={()=>setStep(3)} className="px-4 py-2 bg-white/70 rounded">Back</button>
-                <button type="submit" disabled={!canSubmit() || submitting} className="px-4 py-2 btn-primary rounded disabled:opacity-50 text-white">
+                <button type="button" onClick={()=>setStep(3)} className="px-4 py-2 rounded border" style={{ borderColor: theme.dark, color: theme.dark, backgroundColor: "#fff" }}>Back</button>
+                <button type="submit" disabled={!canSubmit() || submitting} className="px-4 py-2 rounded text-white disabled:opacity-50" style={{ backgroundColor: theme.dark }}>
                   {submitting ? "Creating..." : "Create Account"}
                 </button>
               </div>
             </section>
           )}
 
-          <p className="text-sm text-white/80 text-center">
-            Already have an account? <Link to="/login" className="underline">Student Sign In</Link>
-            <span className="mx-2">•</span>
-            <Link to="/admin/login" className="underline">Admin Login</Link>
-          </p>
+          {/* No duplicated login links below; optional small footer could go here */}
           </form>
-          <div className="text-center mt-6 text-white/80">
-            Already have an account? <Link to="/login" className="underline">Student Sign In</Link>
-            <span className="mx-2">•</span>
-            <Link to="/mentor/login" className="underline">Mentor Login</Link>
-            <span className="mx-2">•</span>
-            <Link to="/admin/login" className="underline">Admin Login</Link>
-          </div>
-        </div>
       </div>
     </div>
   );

@@ -21,7 +21,8 @@ export default function PortalLogin() {
       const { data } = await API.post("/auth/student/login", form);
       if (data.status === "Approved" && data.token) {
         localStorage.setItem("token", data.token);
-        navigate("/home");
+        // Navigate directly to the new student app shell
+        navigate("/app/home");
       } else if (data.status === "Pending") {
         setMsg("Your signup request is under review.");
       } else if (data.status === "Rejected") {
@@ -72,12 +73,7 @@ export default function PortalLogin() {
             {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
-        <div className="text-center mt-4 text-white/80 text-sm">
-          New here? <Link className="underline" to="/portal/signup">Create your student account</Link>
-        </div>
-        <div className="text-center mt-2 text-white/80 text-sm">
-          Mentor? <Link className="underline" to="/mentor/login">Go to Mentor Login</Link>
-        </div>
+        {/* Removed additional links per request */}
       </div>
     </div>
   );

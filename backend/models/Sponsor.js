@@ -13,5 +13,7 @@ const SponsorSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 SponsorSchema.index({ active: 1, tier: 1, name: 1 });
+// Text index for search
+SponsorSchema.index({ name: "text", description: "text" });
 
 export default mongoose.model("Sponsor", SponsorSchema);

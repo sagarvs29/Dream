@@ -4,6 +4,10 @@ import { useNavigate } from "react-router-dom";
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const goBack = () => {
+    if (window.history.length > 1) navigate(-1);
+    else navigate("/signup");
+  };
   const [formData, setFormData] = useState({
     identifier: "", // phone or email
     password: "",
@@ -44,6 +48,16 @@ const LoginPage = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-indigo-600 to-purple-600">
+      {/* Back button */}
+      <button
+        onClick={goBack}
+        aria-label="Go back"
+        className="fixed left-4 top-4 z-50 h-10 w-10 rounded-full bg-white/90 text-slate-700 shadow hover:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 flex items-center justify-center"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+          <path d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
       <div className="bg-white p-10 rounded-2xl shadow-xl w-full max-w-md">
         <h2 className="text-3xl font-bold text-center text-gray-800 mb-6">
           Welcome Back
@@ -79,23 +93,11 @@ const LoginPage = () => {
           </button>
         </form>
 
-        <div className="mt-6 text-center text-gray-600 space-y-2">
+        <div className="mt-6 text-center text-gray-600">
           <p>
             Don’t have an account?{" "}
             <a href="/signup" className="text-indigo-500 font-semibold hover:underline">
               Create one
-            </a>
-          </p>
-          <p>
-            Are you an admin?{" "}
-            <a href="/admin/login" className="text-indigo-500 font-semibold hover:underline">
-              Go to Admin Login
-            </a>
-          </p>
-          <p>
-            Mentor?{" "}
-            <a href="/mentor/login" className="text-indigo-500 font-semibold hover:underline">
-              Go to Mentor Login
             </a>
           </p>
         </div>

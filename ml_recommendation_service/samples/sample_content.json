@@ -1,0 +1,7 @@
+[
+  {"course_id": "c101", "title": "Intro to Python", "description": "Basics of Python programming", "tags": ["python", "basics"]},
+  {"course_id": "c102", "title": "Data Science 101", "description": "Fundamentals of data analysis", "tags": ["data", "analysis"]},
+  {"course_id": "c103", "title": "ML 101", "description": "Intro to machine learning and AI", "tags": ["ml", "ai", "intro"]},
+  {"course_id": "c201", "title": "Neural Networks", "description": "Deep learning foundations", "tags": ["dl", "nn", "ai"]},
+  {"course_id": "c301", "title": "Graphic Design Basics", "description": "Design principles and tools", "tags": ["design", "art"]}
+]

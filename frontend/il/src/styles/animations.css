@@ -1,2 +1,11 @@
 .animate-fade-in{animation:fade-in .2s ease-out both}
 @keyframes fade-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+/* Fade in, hold, then fade out (used by Splash logo card) */
+.animate-fadeInOut{animation:fadeInOut 2.4s ease-in-out both}
+@keyframes fadeInOut{
+	0%{opacity:0; transform:scale(.96)}
+	12%{opacity:1; transform:scale(1)}
+	88%{opacity:1; transform:scale(1)}
+	100%{opacity:0; transform:scale(.98)}
+}

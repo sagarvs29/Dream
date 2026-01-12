@@ -7,6 +7,7 @@ import Connection from "../../models/Connection.js";
 import Notification from "../../models/Notification.js";
 import School from "../../models/School.js";
 import Sponsor from "../../models/Sponsor.js";
+import Sponsorship from "../../models/Sponsorship.js";
 
 const router = express.Router();
 
@@ -116,7 +117,28 @@ router.get("/network/requests", requireStudent, async (req, res) => {
       ? { "target.userId": req.student._id, status: "Pending" }
       : { "requester.userId": req.student._id, status: "Pending" };
     const list = await ConnectionRequest.find(q).sort({ createdAt: -1 }).lean();
-    res.json({ requests: list });
+
+    // Enrich with minimal profile details for display
+    const studentIds = new Set();
+    const teacherIds = new Set();
+    for (const r of list) {
+      const counterpart = inbound ? r.requester : r.target;
+      if (counterpart.userModel === "Student") studentIds.add(String(counterpart.userId));
+      if (counterpart.userModel === "Teacher") teacherIds.add(String(counterpart.userId));
+    }
+    const studentDocs = studentIds.size ? await Student.find({ _id: { $in: Array.from(studentIds) } }).select("name profilePictureUrl school").lean() : [];
+    const teacherDocs = teacherIds.size ? await Teacher.find({ _id: { $in: Array.from(teacherIds) } }).select("name profilePictureUrl department designation").lean() : [];
+    const sMap = new Map(studentDocs.map(d => [String(d._id), d]));
+    const tMap = new Map(teacherDocs.map(d => [String(d._id), d]));
+
+    const enriched = list.map(r => {
+      const counterpart = inbound ? r.requester : r.target;
+      const cId = String(counterpart.userId);
+      const profile = counterpart.userModel === "Student" ? sMap.get(cId) : tMap.get(cId);
+      return { ...r, counterpart: profile ? { _id: profile._id, name: profile.name, profilePictureUrl: profile.profilePictureUrl } : undefined };
+    });
+
+    res.json({ requests: enriched });
   } catch (e) {
     res.status(500).json({ message: "Failed to load requests", error: e.message });
   }
@@ -132,20 +154,16 @@ router.post("/network/requests/:id/accept", requireStudent, async (req, res) => 
     cr.status = "Accepted";
     await cr.save();
 
-    // Create connection (idempotent; normalized Student-Teacher ordering)
-    const reqIsStudent = cr.requester.userModel === 'Student';
-    const studentSide = reqIsStudent ? cr.requester : cr.target;
-    const teacherSide = reqIsStudent ? cr.target : cr.requester;
-    const a = { userId: studentSide.userId, userModel: 'Student' };
-    const b = { userId: teacherSide.userId, userModel: 'Teacher' };
-    const exists = await Connection.findOne({
-      $or: [
-        { "userA.userId": a.userId, "userB.userId": b.userId },
-        { "userA.userId": b.userId, "userB.userId": a.userId }
-      ]
-    });
+    // Create connection (idempotent) supporting Student-Student and Student-Teacher
+    let a = { userId: cr.requester.userId, userModel: cr.requester.userModel };
+    let b = { userId: cr.target.userId, userModel: cr.target.userModel };
+    // Deterministic ordering for uniqueness: by model then by id
+    const modelRank = (m) => (m === 'Student' ? 1 : 2);
+    const cmp = modelRank(a.userModel) - modelRank(b.userModel) || String(a.userId).localeCompare(String(b.userId));
+    if (cmp > 0) { const tmp = a; a = b; b = tmp; }
+    const exists = await Connection.findOne({ "userA.userId": a.userId, "userB.userId": b.userId });
     if (!exists) {
-      try { await Connection.create({ userA: a, userB: b }); } catch (_) {}
+      try { await Connection.create({ userA: a, userB: b }); } catch (_) { /* ignore dup */ }
     }
 
     await Notification.create({
@@ -220,6 +238,43 @@ router.get("/network/mentors", requireStudent, async (req, res) => {
   }
 });
 
+// GET /api/student/network/students - list of connected student peers
+router.get("/network/students", requireStudent, async (req, res) => {
+  try {
+    const uid = req.student._id;
+    const conns = await Connection.find({ $or: [ { "userA.userId": uid }, { "userB.userId": uid } ] }).lean();
+    const studentIds = new Set();
+    for (const c of conns) {
+      const a = c.userA, b = c.userB;
+      if (String(a.userModel) === 'Student' && String(b.userId) === String(uid)) studentIds.add(String(a.userId));
+      if (String(b.userModel) === 'Student' && String(a.userId) === String(uid)) studentIds.add(String(b.userId));
+    }
+    const docs = studentIds.size ? await Student.find({ _id: { $in: Array.from(studentIds) } }).select('name email profilePictureUrl').lean() : [];
+    res.json({ students: docs });
+  } catch (e) {
+    res.status(500).json({ message: 'Failed to load students', error: e.message });
+  }
+});
+
+// DELETE /api/student/network/connections/:mentorId - disconnect from a mentor
+router.delete("/network/connections/:mentorId", requireStudent, async (req, res) => {
+  try {
+    const studentId = String(req.student._id);
+    const mentorId = String(req.params.mentorId);
+    const conn = await Connection.findOne({
+      $or: [
+        { "userA.userId": studentId, "userA.userModel": 'Student', "userB.userId": mentorId, "userB.userModel": 'Teacher' },
+        { "userA.userId": mentorId, "userA.userModel": 'Teacher', "userB.userId": studentId, "userB.userModel": 'Student' }
+      ]
+    });
+    if (!conn) return res.status(404).json({ message: 'Connection not found' });
+    await conn.deleteOne();
+    return res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ message: 'Failed to disconnect', error: e.message });
+  }
+});
+
 // GET /api/student/network/schools - returns schools with basic info and mentors preview
 router.get("/network/schools", requireStudent, async (_req, res) => {
   try {
@@ -266,6 +321,20 @@ router.get("/network/sponsors", requireStudent, async (_req, res) => {
     res.json({ sponsors });
   } catch (e) {
     res.status(500).json({ message: "Failed to load sponsors", error: e.message });
+  }
+});
+
+// GET /api/student/sponsorships - list current student's sponsorships with totals
+router.get("/sponsorships", requireStudent, async (req, res) => {
+  try {
+    const list = await Sponsorship.find({ student: req.student._id, status: { $ne: "Cancelled" } })
+      .populate({ path: "sponsor", select: "name logoUrl website tier" })
+      .sort({ createdAt: -1 })
+      .lean();
+    const total = list.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+    res.json({ total, currency: list[0]?.currency || "INR", sponsorships: list });
+  } catch (e) {
+    res.status(500).json({ message: "Failed to load sponsorships", error: e.message });
   }
 });
 

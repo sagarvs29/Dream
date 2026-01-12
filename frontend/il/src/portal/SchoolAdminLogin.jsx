@@ -9,6 +9,10 @@ export default function SchoolAdminLogin() {
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
   const nav = useNavigate();
+  const goBack = () => {
+    if (window.history.length > 1) nav(-1);
+    else nav("/signup");
+  };
 
   async function onSubmit(e) {
     e.preventDefault();
@@ -32,6 +36,16 @@ export default function SchoolAdminLogin() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-violet-600 via-indigo-600 to-violet-700 flex items-center justify-center p-6">
+      {/* Back button */}
+      <button
+        onClick={goBack}
+        aria-label="Go back"
+        className="fixed left-4 top-4 z-50 h-10 w-10 rounded-full bg-white/90 text-slate-700 shadow hover:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 flex items-center justify-center"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+          <path d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8">
         <h1 className="text-2xl font-bold text-slate-800 text-center">Welcome Back</h1>
         <p className="mt-1 text-center text-slate-500">Login to continue to your account</p>
@@ -58,10 +72,7 @@ export default function SchoolAdminLogin() {
           </button>
         </form>
 
-        <p className="mt-4 text-center text-slate-500 text-sm">
-          Don’t have an account? {" "}
-          <Link to="/admin/login" className="text-indigo-600 hover:underline">Create one</Link>
-        </p>
+        {/* Removed self-signup footer: school admins are created by management */}
       </div>
     </div>
   );

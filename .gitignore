@@ -38,3 +38,22 @@ Thumbs.db
 # Misc
 .sass-cache/
 .parcel-cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+env/
+venv/
+.venv/
+ENV/
+pip-wheel-metadata/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+*.egg-info/
+*.egg
+site/__pycache__/
+**/.DS_Store

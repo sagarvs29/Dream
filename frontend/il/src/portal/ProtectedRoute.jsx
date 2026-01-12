@@ -1,8 +1,9 @@
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
+import { getAdminToken } from "../utils/tokens";
 
 export default function ProtectedRoute({ children, role }) {
-  const token = typeof window !== "undefined" ? localStorage.getItem("adm_token") : null;
+  const token = typeof window !== "undefined" ? getAdminToken() : null;
   const currentRole = typeof window !== "undefined" ? localStorage.getItem("adm_role") : null;
   const location = useLocation();
 

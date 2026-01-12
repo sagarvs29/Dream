@@ -1,0 +1,16 @@
+[
+  {
+    "student_id": "101",
+    "interests": ["machine learning", "ai", "python"],
+    "profile": {"gpa": 3.6, "department": "CSE", "year": 2},
+    "completed_courses": ["c101", "c103"],
+    "clicked_courses": ["c201"]
+  },
+  {
+    "student_id": "102",
+    "interests": ["design", "art"],
+    "profile": {"gpa": 3.2, "department": "DES", "year": 1},
+    "completed_courses": ["c301"],
+    "clicked_courses": []
+  }
+]

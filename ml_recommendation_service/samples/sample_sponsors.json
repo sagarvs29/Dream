@@ -1,0 +1,4 @@
+[
+  {"sponsor_id": "s1", "name": "TechCorp", "description": "Tech scholarships for AI students", "criteria": {"min_gpa": 3.0, "required_department": "CSE"}},
+  {"sponsor_id": "s2", "name": "ArtFund", "description": "Grants for design and art students", "criteria": {"min_gpa": 2.8, "required_department": "DES"}}
+]

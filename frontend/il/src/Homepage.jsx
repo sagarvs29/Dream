@@ -1,17 +1,15 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
-import PostComposer from "./components/PostComposer.jsx";
+import api from "./utils/apiClient";
+import NewPostFlow from "./components/newpost/NewPostFlow.jsx";
 
-const API = axios.create({
-  baseURL: import.meta.env?.VITE_API_BASE_URL || "http://localhost:5000/api",
-  withCredentials: true,
-});
+const API = api;
 
 const HomePage = () => {
   const [user, setUser] = useState(null);
   const [showUserInfo, setShowUserInfo] = useState(false);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [showNewPost, setShowNewPost] = useState(false);
   const [expandedCaptions, setExpandedCaptions] = useState({}); // postId -> bool
   const [menuOpenId, setMenuOpenId] = useState(null); // owner three-dot menu
 
@@ -676,8 +674,14 @@ const HomePage = () => {
   }
   
   return (
-      <div className="pt-24 px-6 pb-16">
-        <div className="max-w-6xl mx-auto">
+      <div className="min-h-screen w-full relative overflow-hidden bg-gradient-to-br from-[#7a75ff] via-[#a479ff] to-[#79ccff]">
+        {/* Decorative background blobs */}
+        <div className="absolute -top-24 -left-24 h-80 w-80 rounded-full bg-white/35 blur-3xl" />
+        <div className="absolute -bottom-32 -right-20 h-96 w-96 rounded-full bg-white/30 blur-3xl" />
+        <div className="absolute top-1/3 -right-10 h-72 w-72 rounded-full bg-pink-300/30 blur-3xl" />
+        <div className="absolute top-1/4 left-10 h-64 w-64 rounded-full bg-blue-200/40 blur-3xl" />
+
+        <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Top actions */}
           <div className="flex justify-end">
             <button onClick={openProfile} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
@@ -685,24 +689,27 @@ const HomePage = () => {
             </button>
           </div>
 
-          {/* Create Post - Instagram-style composer */}
+          {/* Create Post - glass button */}
           <div className="mb-8">
-            <PostComposer user={user} onPostCreated={(p) => setFeed(prev => [p, ...prev])} />
+            <button onClick={()=>setShowNewPost(true)} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white border border-white/30 backdrop-blur">
+              New Post
+            </button>
           </div>
+          <NewPostFlow open={showNewPost} onClose={()=>setShowNewPost(false)} onPosted={(p)=>setFeed(prev=>[p,...prev])} />
 
-          {/* Feed - Redesigned post cards */}
-          <div className="rounded-2xl border shadow-sm p-6 bg-white mb-8">
+          {/* Feed container */}
+          <div className="rounded-3xl border border-white/25 bg-white/12 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.18)] p-6 mb-8 text-white">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">Feed</h2>
+              <h2 className="text-xl font-semibold text-white/90">Feed</h2>
               <div className="flex items-center gap-2">
-                <button onClick={()=>loadFeed("school")} className="px-3 py-1.5 rounded bg-gray-100 text-gray-800">School</button>
-                <button onClick={()=>loadFeed("public")} className="px-3 py-1.5 rounded bg-gray-100 text-gray-800">Public</button>
+                <button onClick={()=>loadFeed("school")} className="px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white/90 border border-white/25">School</button>
+                <button onClick={()=>loadFeed("public")} className="px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white/90 border border-white/25">Public</button>
               </div>
             </div>
             {loadingFeed ? (
-              <div className="text-gray-600">Loading…</div>
+              <div className="text-white/80">Loading…</div>
             ) : feed.length === 0 ? (
-              <div className="text-gray-500">No posts yet</div>
+              <div className="text-white/70">No posts yet</div>
             ) : (
               <div className="space-y-5">
                 {feed.map((p) => {
@@ -715,36 +722,36 @@ const HomePage = () => {
                   const shortCaption = caption.length > 220 && !expanded ? caption.slice(0, 220) + " …" : caption;
                   const authorId = p.author?._id || p.author;
                   return (
-                    <article key={p._id} className="bg-white rounded-xl shadow p-4 border border-gray-100">
+                    <article key={p._id} className="rounded-3xl border border-white/25 bg-white/12 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.18)] p-4">
                       {/* Header */}
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center text-sm font-semibold">
+                        <div className="w-10 h-10 rounded-full bg-white/30 backdrop-blur-sm text-white/90 flex items-center justify-center text-sm font-semibold">
                           {initialsOfName(authorName)}
                         </div>
                         <div className="min-w-0">
-                          <div className="font-medium text-gray-900 truncate">{authorName}</div>
-                          <div className="text-xs text-gray-500">{new Date(p.createdAt).toLocaleString()}</div>
+                          <div className="font-medium text-white/90 truncate">{authorName}</div>
+                          <div className="text-xs text-white/70">{new Date(p.createdAt).toLocaleString()}</div>
                         </div>
                         <div className="ml-auto flex items-center gap-2">
                           {p.visibility === "school" && (
-                            <span className="text-[10px] bg-gray-100 text-gray-600 rounded-full px-2 py-0.5">School-only</span>
+                            <span className="text-[10px] bg-white/20 text-white/90 border border-white/25 rounded-full px-2 py-0.5">School-only</span>
                           )}
                           {connectedStudentIds.includes(String(authorId)) && (
-                            <span className="text-[10px] bg-emerald-100 text-emerald-700 rounded-full px-2 py-0.5">Connected</span>
+                            <span className="text-[10px] bg-emerald-400/20 text-emerald-100 border border-emerald-200/30 rounded-full px-2 py-0.5">Connected</span>
                           )}
                           {isOwner && (
                             <div className="relative">
                               <button
-                                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100"
+                                className="h-9 w-9 grid place-items-center rounded-xl bg-white/15 border border-white/25 text-white/80"
                                 onClick={() => setMenuOpenId((v) => (v === p._id ? null : p._id))}
                                 title="Options"
                               >
                                 ⋮
                               </button>
                               {menuOpenId === p._id && (
-                                <div className="absolute right-0 mt-2 w-36 bg-white border border-gray-200 rounded-lg shadow z-10">
-                                  <button onClick={() => { setMenuOpenId(null); openEditPost(p); }} className="w-full text-left px-3 py-2 hover:bg-gray-50">✏️ Edit</button>
-                                  <button onClick={() => { setMenuOpenId(null); deletePost(p._id); }} className="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50">🗑️ Delete</button>
+                                <div className="absolute right-0 mt-2 w-40 rounded-xl bg-[#0b0f19]/90 border border-white/15 shadow-xl z-10 overflow-hidden">
+                                  <button onClick={() => { setMenuOpenId(null); openEditPost(p); }} className="w-full text-left px-3 py-2 text-white/90 hover:bg-white/10">✏️ Edit</button>
+                                  <button onClick={() => { setMenuOpenId(null); deletePost(p._id); }} className="w-full text-left px-3 py-2 text-red-300 hover:bg-white/10">🗑️ Delete</button>
                                 </div>
                               )}
                             </div>
@@ -754,54 +761,55 @@ const HomePage = () => {
 
                       {/* Media (only if present) */}
                       {hasMedia && (
-                        <div className="mt-3 overflow-hidden rounded-lg">
+                        <div className="mt-3 relative rounded-2xl overflow-hidden border border-white/20 bg-white/10">
                           {media.kind === "video" ? (
                             <video controls className="w-full h-auto max-h-[60vh] object-contain bg-black">
                               <source src={media.url} />
                             </video>
                           ) : (
-                            <img src={media.url} alt="post media" className="w-full h-auto object-contain bg-black/5" />
+                            <img src={media.url} alt="post media" className="w-full h-[340px] object-cover" />
                           )}
+                          <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-white/10" />
                         </div>
                       )}
 
                       {/* Action bar (icons only) */}
-                      <div className="mt-3 flex items-center justify-between">
-                        <div className="flex items-center gap-4">
+                      <div className="mt-4 flex items-center gap-3">
                           <button
-                            className={`w-9 h-9 rounded-full flex items-center justify-center hover:bg-gray-100 ${isOwner ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/12 hover:bg-white/20 transition border border-white/25 text-white/90 ${isOwner ? 'opacity-50 cursor-not-allowed' : ''}`}
                             onClick={() => !isOwner && toggleLike(p._id)}
                             title="Motivate"
                           >
-                            <span className="text-xl" role="img" aria-label="motivate">🔥</span>
+                            <span className="text-base" role="img" aria-label="motivate">🔥</span>
+                            <span className="text-sm">{p.likeCount || 0}</span>
                           </button>
                           <button
-                            className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-gray-100"
+                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/12 hover:bg-white/20 transition border border-white/25 text-white/90"
                             onClick={() => sendCollabRequest(authorId)}
                             title="Collab"
                           >
-                            <span className="text-xl" role="img" aria-label="collab">🤝</span>
+                            <span className="text-base" role="img" aria-label="collab">🤝</span>
                           </button>
                           <button
-                            className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-gray-100"
+                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/12 hover:bg-white/20 transition border border-white/25 text-white/90"
                             onClick={() => shareGeneric(p)}
                             title="Share"
                           >
-                            <span className="text-xl" role="img" aria-label="share">🔗</span>
+                            <span className="text-base" role="img" aria-label="share">🔗</span>
                           </button>
-                        </div>
+                        <div className="ml-auto text-white/70 text-xs uppercase tracking-wide">{new Date(p.createdAt).toLocaleString()}</div>
                       </div>
 
                       {/* Stats */}
-                      <div className="mt-2 text-sm text-gray-700">🔥 {p.likeCount || 0} Motivates</div>
+                      <div className="mt-2 text-sm text-white/80">🔥 {p.likeCount || 0} Motivates</div>
 
                       {/* Caption */}
                       {caption && (
-                        <div className="mt-1 text-gray-900 whitespace-pre-wrap">
+                        <div className="mt-1 text-white/90 whitespace-pre-wrap">
                           {shortCaption}
                           {caption.length > 220 && (
                             <button
-                              className="ml-1 text-sm text-gray-500 hover:text-gray-700"
+                              className="ml-1 text-sm text-white/70 hover:text-white/90"
                               onClick={() => setExpandedCaptions((prev) => ({ ...prev, [p._id]: !prev[p._id] }))}
                             >
                               {expanded ? "less" : "more"}
@@ -812,7 +820,7 @@ const HomePage = () => {
 
                       {/* Collab area placeholder */}
                       <div className="mt-2">
-                        <button className="text-sm text-indigo-700 hover:underline" title="View collaborators (coming soon)">View Collaborators</button>
+                        <button className="text-sm text-white/80 hover:text-white/95 underline-offset-2 hover:underline" title="View collaborators (coming soon)">View Collaborators</button>
                       </div>
                     </article>
                   );
@@ -823,64 +831,64 @@ const HomePage = () => {
 
           {/* Network entry/panel below */}
           {!showNetwork ? (
-            <div className="rounded-2xl border shadow-sm p-8 bg-white/70 text-center">
-              <h2 className="text-2xl font-bold">Student Network</h2>
-              <p className="text-gray-600 mt-1">Discover students and schools, and connect</p>
+            <div className="rounded-3xl border border-white/25 bg-white/12 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.18)] p-8 text-center text-white">
+              <h2 className="text-2xl font-bold text-white/90">Student Network</h2>
+              <p className="text-white/80 mt-1">Discover students and schools, and connect</p>
               <button
-                className="mt-6 inline-flex items-center px-6 py-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                className="mt-6 inline-flex items-center px-6 py-3 rounded-xl bg-white/20 hover:bg-white/30 text-white border border-white/30 backdrop-blur"
                 onClick={() => setShowNetwork(true)}
               >
                 Open Network
               </button>
             </div>
           ) : (
-            <div className="rounded-2xl border shadow-sm p-6 bg-white/70 backdrop-blur">
+            <div className="rounded-3xl border border-white/25 bg-white/12 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.18)] p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-2xl font-bold">Student Network</h2>
-                  <p className="text-gray-600 mt-1">Connect with students and explore schools (mentors are under each school)</p>
+                  <h2 className="text-2xl font-bold text-white/90">Student Network</h2>
+                  <p className="text-white/80 mt-1">Connect with students and explore schools (mentors are under each school)</p>
                 </div>
-                <button className="text-gray-600 hover:text-gray-800" onClick={()=>setShowNetwork(false)}>Close ✖</button>
+                <button className="text-white/80 hover:text-white/95" onClick={()=>setShowNetwork(false)}>Close ✖</button>
               </div>
 
               {/* Tabs */}
               <div className="flex justify-center gap-2 mt-6">
                 {['Students','Schools'].map(t => (
-                  <button key={t} onClick={()=>setTab(t)} className={`px-4 py-2 rounded ${tab===t? 'bg-blue-600 text-white':'bg-gray-100 text-gray-700'}`}>{t}</button>
+                  <button key={t} onClick={()=>setTab(t)} className={`px-4 py-2 rounded-xl border ${tab===t? 'bg-white/25 border-white/30 text-white':'bg-white/10 border-white/20 text-white/85 hover:bg-white/20'}`}>{t}</button>
                 ))}
               </div>
 
               {/* Search */}
               <div className="mt-4">
-                <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={`Search ${tab.toLowerCase()}`} className="w-full px-4 py-2 border rounded" />
+                <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={`Search ${tab.toLowerCase()}`} className="w-full px-4 py-2 rounded-2xl bg-white/10 border border-white/25 text-white placeholder-white/70 outline-none" />
               </div>
 
               {/* Grid */}
               <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
                 {tab === 'Students' && (
                   filteredStudents.length === 0 ? (
-                    <div className="text-gray-500 col-span-full">No students yet</div>
+                    <div className="text-white/70 col-span-full">No students yet</div>
                   ) : (
                     filteredStudents.map(s => {
                       const isRequested = requestedStudents.includes(String(s._id));
                       const isConnected = connectedStudents.includes(String(s._id));
                       return (
-                        <div key={s._id} className="rounded-xl border p-4 bg-white">
-                          <div className="w-12 h-12 rounded-full bg-gray-200 mb-2"></div>
-                          <div className="font-semibold">{s.name}</div>
-                          <div className="text-sm text-gray-500">{s.school?.name || ''}</div>
+                        <div key={s._id} className="rounded-xl border border-white/25 bg-white/10 backdrop-blur p-4 text-white">
+                          <div className="w-12 h-12 rounded-full bg-white/30 mb-2"></div>
+                          <div className="font-semibold text-white/90">{s.name}</div>
+                          <div className="text-sm text-white/70">{s.school?.name || ''}</div>
                           {isConnected ? (
-                            <div className="mt-3 w-full px-3 py-2 rounded bg-emerald-100 text-emerald-700 text-center text-sm">Connected</div>
+                            <div className="mt-3 w-full px-3 py-2 rounded bg-emerald-400/20 text-emerald-100 border border-emerald-200/30 text-center text-sm">Connected</div>
                           ) : isRequested ? (
                             <button
-                              className="mt-3 w-full px-3 py-2 rounded bg-gray-200 text-gray-700"
+                              className="mt-3 w-full px-3 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white border border-white/30"
                               onClick={() => cancelRequest(s._id)}
                             >
                               Cancel request
                             </button>
                           ) : (
                             <button
-                              className="mt-3 w-full px-3 py-2 rounded bg-blue-600 text-white"
+                              className="mt-3 w-full px-3 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white border border-white/30"
                               onClick={() => connect(s._id, 'Student')}
                             >
                               Connect
@@ -894,52 +902,52 @@ const HomePage = () => {
 
                 {tab === 'Schools' && (
                   filteredSchools.length === 0 ? (
-                    <div className="text-gray-500 col-span-full">No schools found</div>
+                    <div className="text-white/70 col-span-full">No schools found</div>
                   ) : (
                     filteredSchools.map(s => (
-                      <div key={s._id} className="rounded-xl border p-4 bg-white">
+                      <div key={s._id} className="rounded-xl border border-white/25 bg-white/10 backdrop-blur p-4 text-white">
                         <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded bg-gray-200"></div>
+                          <div className="w-12 h-12 rounded bg-white/30"></div>
                           <div>
-                            <div className="font-semibold">{s.name}</div>
-                            <div className="text-sm text-gray-500">{s.address || ''}</div>
+                            <div className="font-semibold text-white/90">{s.name}</div>
+                            <div className="text-sm text-white/70">{s.address || ''}</div>
                           </div>
                         </div>
                         {s.principalName && (
-                          <div className="mt-3 text-sm text-gray-700">Principal: {s.principalName}</div>
+                          <div className="mt-3 text-sm text-white/85">Principal: {s.principalName}</div>
                         )}
                         {Array.isArray(s.heads) && s.heads.length > 0 && (
                           <div className="mt-2">
-                            <div className="text-xs text-gray-500">Heads of Departments</div>
+                            <div className="text-xs text-white/70">Heads of Departments</div>
                             <ul className="mt-1 space-y-1">
                               {s.heads.slice(0,3).map((h,idx)=>(
-                                <li key={idx} className="text-sm text-gray-700">{h.department ? `${h.department}: `: ''}{h.name}</li>
+                                <li key={idx} className="text-sm text-white/85">{h.department ? `${h.department}: `: ''}{h.name}</li>
                               ))}
                             </ul>
                           </div>
                         )}
                         {/* Mentors under this school */}
                         <div className="mt-4">
-                          <div className="text-xs text-gray-500 mb-2">Mentors</div>
+                          <div className="text-xs text-white/70 mb-2">Mentors</div>
                           {(!s.mentors || s.mentors.length===0) ? (
-                            <div className="text-gray-400 text-sm">No mentors listed</div>
+                            <div className="text-white/60 text-sm">No mentors listed</div>
                           ) : (
                             <div className="flex flex-wrap gap-2">
                               {s.mentors.map(m => {
                                 const isRequested = requestedTeachers.includes(String(m._id));
                                 const isConnected = connectedTeachers.includes(String(m._id));
                                 return (
-                                  <div key={m._id} className="border rounded-lg px-3 py-2 bg-gray-50">
-                                    <div className="text-sm font-medium">{m.name}</div>
-                                    <div className="text-xs text-gray-500">{m.department || ''}</div>
+                                  <div key={m._id} className="border border-white/25 rounded-lg px-3 py-2 bg-white/10 backdrop-blur text-white">
+                                    <div className="text-sm font-medium text-white/90">{m.name}</div>
+                                    <div className="text-xs text-white/70">{m.department || ''}</div>
                                     {isConnected ? (
-                                      <span className="mt-2 inline-block text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700">Connected</span>
+                                      <span className="mt-2 inline-block text-xs px-2 py-1 rounded bg-emerald-400/20 text-emerald-100 border border-emerald-200/30">Connected</span>
                                     ) : isRequested ? (
-                                      <button className="mt-2 text-xs px-2 py-1 rounded bg-gray-200 text-gray-700" onClick={()=>cancelRequest(m._id)}>Cancel</button>
+                                      <button className="mt-2 text-xs px-2 py-1 rounded-xl bg-white/20 hover:bg-white/30 text-white border border-white/30" onClick={()=>cancelRequest(m._id)}>Cancel</button>
                                     ) : (
-                                      <button className="mt-2 text-xs px-2 py-1 rounded bg-blue-600 text-white" onClick={()=>connect(m._id,'Teacher')}>Connect</button>
+                                      <button className="mt-2 text-xs px-2 py-1 rounded-xl bg-white/20 hover:bg-white/30 text-white border border-white/30" onClick={()=>connect(m._id,'Teacher')}>Connect</button>
                                     )}
-                                    <button className="mt-2 ml-2 text-xs px-2 py-1 rounded bg-emerald-600 text-white" onClick={()=>openChat(m._id,'Teacher', m.name)}>Message</button>
+                                    <button className="mt-2 ml-2 text-xs px-2 py-1 rounded-xl bg-white/20 hover:bg-white/30 text-white border border-white/30" onClick={()=>openChat(m._id,'Teacher', m.name)}>Message</button>
                                   </div>
                                 );
                               })}

@@ -16,12 +16,24 @@ import schoolAdminRoutes from "./routes/portal/schoolAdminRoutes.js";
 import enhancedProfileRoutes from "./routes/enhancedProfileRoutes.js";
 import studentProfileRoutes from "./routes/studentProfileRoutes.js";
 import studentNetworkRoutes from "./routes/portal/studentNetworkRoutes.js";
+import studentProgressRoutes from "./routes/portal/studentProgressRoutes.js";
+import studentInstitutionRoutes from "./routes/portal/studentInstitutionRoutes.js";
+import studentQuizRoutes from "./routes/portal/studentQuizRoutes.js";
 import mentorAuthRoutes from "./routes/mentorAuthRoutes.js";
+import sponsorAuthRoutes from "./routes/sponsorAuthRoutes.js";
+import sponsorRoutes from "./routes/sponsorRoutes.js";
+import adminSponsorRoutes from "./routes/adminSponsorRoutes.js";
+import studentSponsorshipRoutes from "./routes/studentSponsorshipRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
 import postsRoutes from "./routes/postsRoutes.js";
+import searchRoutes from "./routes/searchRoutes.js";
+import libraryRoutes from "./routes/libraryRoutes.js";
+import institutionRoutes from "./routes/institutionRoutes.js";
+import feesRoutes from "./routes/feesRoutes.js";
 import Admin from "./models/Admin.js";
 import bcrypt from "bcryptjs";
 import School from "./models/School.js";
+import Resource from "./models/Resource.js";
 import cloudinary from "./utils/cloudinary.js";
 
 
@@ -45,7 +57,13 @@ const allowedOrigins = [
 const corsOptions = {
   origin: function (origin, callback) {
     if (!origin) return callback(null, true); // allow curl/postman
-    if (allowedOrigins.includes(origin)) return callback(null, true);
+    const allowDevTunnel = origin?.includes('.devtunnels.ms');
+    // Allow LAN-dev Vite served from 192.168.x.x:5173 (mobile testing)
+  const isLanDev192 = /^http:\/\/192\.168\.\d+\.\d+:(5173|5174)$/.test(origin);
+  const isLanDev10 = /^http:\/\/10\.\d+\.\d+\.\d+:(5173|5174)$/.test(origin);
+  // Support 172.16.0.0 – 172.31.255.255 private range (common hotspot / VM networks)
+  const isLanDev172 = /^http:\/\/172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+:(5173|5174)$/.test(origin);
+  if (allowedOrigins.includes(origin) || allowDevTunnel || isLanDev192 || isLanDev10 || isLanDev172) return callback(null, true);
     return callback(new Error("Not allowed by CORS"));
   },
   credentials: true,
@@ -53,12 +71,29 @@ const corsOptions = {
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
 };
 
-app.use(cors(corsOptions));
-// Ensure preflight requests succeed with 204
+// CORS: handle both simple requests and preflight correctly
+app.use(cors({ ...corsOptions, optionsSuccessStatus: 204 }));
+// Extra safety: add explicit headers for all responses and reply to OPTIONS
 app.use((req, res, next) => {
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
+  const origin = req.headers.origin;
+  const allowDevTunnel = origin?.includes?.('.devtunnels.ms');
+  const isLanDev192 = typeof origin === 'string' && /^http:\/\/192\.168\.\d+\.\d+:(5173|5174)$/.test(origin);
+  const isLanDev10 = typeof origin === 'string' && /^http:\/\/10\.\d+\.\d+\.\d+:(5173|5174)$/.test(origin);
+  const isLanDev172 = typeof origin === 'string' && /^http:\/\/172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+:(5173|5174)$/.test(origin);
+  if (origin && (allowedOrigins.includes(origin) || allowDevTunnel || isLanDev192 || isLanDev10 || isLanDev172)) {
+    res.header("Access-Control-Allow-Origin", origin);
+    res.header("Vary", "Origin");
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.header(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Requested-With"
+    );
+    res.header(
+      "Access-Control-Allow-Methods",
+      "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+    );
   }
+  if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
 
@@ -69,9 +104,20 @@ app.use("/api/auth", authRoutes);
 app.use("/api/auth", studentAuthRoutes);
 app.use("/api/students", studentProfileRoutes);
 app.use("/api/student", studentNetworkRoutes);
+app.use("/api/student", studentProgressRoutes);
+app.use("/api/student", studentInstitutionRoutes);
+app.use("/api/student", studentQuizRoutes);
 app.use("/api/mentor", mentorAuthRoutes);
+app.use("/api/sponsor/auth", sponsorAuthRoutes);
+app.use("/api/sponsor", sponsorRoutes);
+app.use("/api/admin", adminSponsorRoutes);
+app.use("/api", studentSponsorshipRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/posts", postsRoutes);
+app.use("/api/search", searchRoutes);
+app.use("/api/library", libraryRoutes);
+app.use("/api/institution", institutionRoutes); // Institution Copilot domain routes
+app.use("/api/fees", feesRoutes);
 app.use("/api/identity", identityRoutes);
 app.use("/api/contact", contactRoutes);
 app.use("/api/school", schoolRoutes);
@@ -109,6 +155,49 @@ mongoose.connect(process.env.MONGO_URI)
         }
       } catch (e) {
         console.warn("Seed skipped:", e.message);
+      }
+    })();
+    // Seed a few library resources if none
+    (async () => {
+      try {
+        const rc = await Resource.countDocuments();
+        if (rc === 0) {
+          await Resource.insertMany([
+            {
+              title: "Physics: Motion Basics",
+              description: "An introduction to motion, speed, and acceleration with examples.",
+              subject: "Science",
+              tags: ["talent", "project"],
+              gradeLevels: ["Class 8", "Class 9", "Class 10"],
+              url: "https://example.com/physics-motion",
+              thumbnail: "",
+              popularity: 32,
+            },
+            {
+              title: "Mathematics: Algebra Starter Kit",
+              description: "Foundational algebra concepts with practice problems.",
+              subject: "Math",
+              tags: ["innovation"],
+              gradeLevels: ["Class 9", "Class 10"],
+              url: "https://example.com/algebra-basics",
+              thumbnail: "",
+              popularity: 27,
+            },
+            {
+              title: "Science Project Ideas",
+              description: "Hands-on science fair projects for students.",
+              subject: "Science",
+              tags: ["project", "achievement"],
+              gradeLevels: ["Class 6", "Class 7", "Class 8"],
+              url: "https://example.com/science-projects",
+              thumbnail: "",
+              popularity: 45,
+            },
+          ]);
+          console.log("Seeded sample library resources");
+        }
+      } catch (e) {
+        console.warn("Resource seed skipped:", e.message);
       }
     })();
     // Seed a server admin if none

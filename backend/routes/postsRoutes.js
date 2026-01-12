@@ -1,6 +1,7 @@
 import express from "express";
 import jwt from "jsonwebtoken";
 import Post from "../models/Post.js";
+import Notification from "../models/Notification.js";
 import PostLike from "../models/PostLike.js";
 import Appreciation from "../models/Appreciation.js";
 import Student from "../models/Student.js";
@@ -94,10 +95,26 @@ router.post("/upload", requireStudent, upload.single("file"), async (req, res) =
 
 // Create a post (expects media URLs already uploaded; can be extended to handle uploads)
 router.post("/", requireStudent, async (req, res) => {
-  const { media, caption = "", hashtags = [], visibility } = req.body || {};
+  const { media, caption = "", hashtags = [], visibility, tagged = [], location, musicTitle, musicArtist } = req.body || {};
   if (!Array.isArray(media) || media.length === 0) return res.status(400).json({ message: "media required" });
   const vis = visibility === "public" ? "public" : "school";
-  const post = await Post.create({ author: req.student.id, media, caption, hashtags, visibility: vis });
+  // sanitize hashtags -> lowercased unique, trimmed
+  const cleanTags = Array.from(new Set((hashtags || []).map(h => String(h).toLowerCase().trim()).filter(Boolean)));
+  // sanitize tagged users
+  const cleanTagged = Array.isArray(tagged) ? tagged
+    .map(t => ({ userId: t?.userId, userModel: t?.userModel }))
+    .filter(t => t.userId && (t.userModel === 'Student' || t.userModel === 'Teacher'))
+    : [];
+  const post = await Post.create({ author: req.student.id, media, caption, hashtags: cleanTags, visibility: vis, tagged: cleanTagged, location, musicTitle, musicArtist });
+
+  // notify tagged users (best-effort)
+  if (cleanTagged.length) {
+    try {
+      const docs = cleanTagged.map(t => ({ user: { userId: t.userId, userModel: t.userModel }, type: 'PostTagged', refId: post._id, text: 'You were tagged in a post' }));
+      // Insert many but ignore failures
+      await Notification.insertMany(docs);
+    } catch (_) {}
+  }
   res.status(201).json({ post });
 });
 
@@ -121,7 +138,7 @@ router.get("/feed", async (req, res) => {
     .sort({ createdAt: -1 })
     .skip((page - 1) * limit)
     .limit(limit)
-    .populate("author", "name school");
+    .populate({ path: "author", select: "name school", populate: { path: "school", select: "name" } });
   res.json({ posts, page, limit });
 });
 
@@ -208,13 +225,27 @@ router.get('/mentor-feed', async (req, res) => {
       }
     } catch (_) {}
 
-    const match = { visibility: 'public' };
-    let posts = await Post.find(match).sort({ createdAt: -1 }).limit(50).populate('author','name school');
-    if (!actor) return res.json({ posts });
+    // Load public + school posts (we'll filter school posts by mentor's school)
+    let posts = await Post.find({ visibility: { $in: ['public', 'school'] } })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .populate({ path: 'author', select: 'name school', populate: { path: 'school', select: 'name' } });
+    if (!actor) {
+      // If no mentor token, show only public posts
+      posts = posts.filter(p => p.visibility === 'public');
+      return res.json({ posts });
+    }
 
     // Mark posts authored by mentees as connected
     // We’ll compute mentee ids via Connection model but to avoid an import cycle, do a light query here
     const Connection = (await import('../models/Connection.js')).default;
+    const Teacher = (await import('../models/Teacher.js')).default;
+    // Determine mentor's school to allow school-only posts
+    let mentorSchoolId = null;
+    try {
+      const t = await Teacher.findById(actor.userId).select('school');
+      mentorSchoolId = t?.school ? String(t.school) : null;
+    } catch(_) {}
     const conns = await Connection.find({ $or: [ { 'userA.userId': actor.userId }, { 'userB.userId': actor.userId } ] }).lean();
     const menteeIds = new Set();
     for (const c of conns) {
@@ -222,13 +253,45 @@ router.get('/mentor-feed', async (req, res) => {
       if (String(a.userModel) === 'Student' && String(b.userId) === String(actor.userId)) menteeIds.add(String(a.userId));
       if (String(b.userModel) === 'Student' && String(a.userId) === String(actor.userId)) menteeIds.add(String(b.userId));
     }
-    const enriched = posts.map(p => ({
+    const enriched = posts
+      // Filter for visibility: all public; school-only only if same school
+      .filter(p => p.visibility === 'public' || (
+        p.visibility === 'school' && mentorSchoolId && String(p.author?.school?._id || p.author?.school) === mentorSchoolId
+      ))
+      .map(p => ({
       ...p.toObject(),
       connected: menteeIds.has(String(p.author?._id || p.author))
     }));
     res.json({ posts: enriched });
   } catch (e) {
     res.status(500).json({ message: 'Failed to load mentor feed' });
+  }
+});
+
+// Get a single post by id (respect visibility)
+router.get('/:id', async (req, res) => {
+  // avoid conflicting with subroutes like /mentor-feed or /feed
+  if (req.params.id === 'mentor-feed' || req.params.id === 'feed') return res.status(404).end();
+  try {
+    const post = await Post.findById(req.params.id)
+      .populate({ path: 'author', select: 'name school', populate: { path: 'school', select: 'name' } });
+    if (!post) return res.status(404).json({ message: 'Not found' });
+
+    if (post.visibility === 'public') return res.json({ post });
+
+    // school visibility: require a valid student token with same school
+    try {
+      const token = req.header('Authorization')?.replace('Bearer ', '');
+      if (!token) return res.status(403).json({ message: 'Not allowed' });
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      if (decoded.role !== 'STUDENT') return res.status(403).json({ message: 'Not allowed' });
+      if (String(decoded.schoolId) !== String(post.author?.school)) return res.status(403).json({ message: 'Not allowed' });
+      return res.json({ post });
+    } catch (_) {
+      return res.status(403).json({ message: 'Not allowed' });
+    }
+  } catch (e) {
+    return res.status(500).json({ message: 'Failed to load post' });
   }
 });
 

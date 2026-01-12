@@ -19,8 +19,17 @@ router.post("/auth/login", async (req, res) => {
     if (!identifier || !password) return res.status(400).json({ message: "Missing credentials" });
 
     const id = String(identifier).trim();
-    // Login strictly by Mentor ID (auth.username)
-    const t = await Teacher.findOne({ "auth.username": id, active: true });
+    // Login by Mentor ID (auth.username), case-insensitive to avoid user confusion
+    const esc = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const ci = new RegExp(`^${esc}$`, "i");
+    const t = await Teacher.findOne({
+      $or: [
+        { "auth.username": { $regex: ci } },
+        { employeeId: { $regex: ci } },
+        { email: { $regex: ci } },
+      ],
+      active: true,
+    });
     if (!t) return res.status(404).json({ message: "Mentor/Teacher not found" });
     if (!t.passwordHash) return res.status(403).json({ message: "Account not configured. Ask admin to set password." });
 
@@ -33,6 +42,32 @@ router.post("/auth/login", async (req, res) => {
     res.json({ token, mentor: { id: t._id, name: t.name, email: t.email, role: t.role, schoolId: t.school } });
   } catch (e) {
     res.status(500).json({ message: "Login failed" });
+  }
+});
+
+// POST /api/mentor/auth/change-password
+// Body: { currentPassword, newPassword }
+// Requires mentor authentication
+router.post("/auth/change-password", requireMentor, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: "currentPassword and newPassword are required" });
+    }
+
+    const t = await Teacher.findById(req.mentor._id);
+    if (!t) return res.status(404).json({ message: "Mentor/Teacher not found" });
+    if (!t.passwordHash) return res.status(403).json({ message: "Account not configured. Contact admin." });
+
+    const ok = await bcrypt.compare(String(currentPassword), t.passwordHash);
+    if (!ok) return res.status(401).json({ message: "Current password is incorrect" });
+
+    t.passwordHash = await bcrypt.hash(String(newPassword), 10);
+    t.passwordChangedAt = new Date();
+    await t.save();
+    return res.json({ ok: true, message: "Password updated" });
+  } catch (e) {
+    return res.status(500).json({ message: "Failed to change password" });
   }
 });
 

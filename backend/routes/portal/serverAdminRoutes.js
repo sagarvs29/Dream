@@ -3,6 +3,8 @@ import bcrypt from "bcryptjs";
 import School from "../../models/School.js";
 import Admin from "../../models/Admin.js";
 import AuditLog from "../../models/AuditLog.js";
+import SponsorUser from "../../models/SponsorUser.js";
+import validator from "validator";
 import { requireServerAdmin } from "../../middleware/adminAuth.js";
 import multer from "multer";
 import cloudinary from "../../utils/cloudinary.js";
@@ -120,8 +122,6 @@ router.get("/school/:id/admins", requireServerAdmin, async (req, res) => {
   res.json({ admins });
 });
 
-export default router;
-
 // Reset a school admin password (generate new temp password)
 router.post("/admins/:adminId/reset-password", requireServerAdmin, async (req, res) => {
   const { adminId } = req.params;
@@ -209,9 +209,25 @@ router.get("/sponsors", requireServerAdmin, async (_req, res) => {
 
 // Create sponsor
 router.post("/sponsors", requireServerAdmin, async (req, res) => {
-  const { name, website, description, tier, contactEmail, contactPhone, active } = req.body || {};
-  if (!name) return res.status(400).json({ message: "Name required" });
+  const { name, website, description, tier, contactEmail, contactPhone, active, user } = req.body || {};
+  const errors = [];
+  if (!name || name.trim().length < 3) errors.push("Sponsor name min 3 characters");
+  if (!tier) errors.push("Tier required");
+  if (website && !validator.isURL(website, { require_protocol: true })) errors.push("Website invalid");
+  if (contactEmail && !validator.isEmail(contactEmail)) errors.push("Contact email invalid");
+  if (contactPhone && !/^\d{10}$/.test(contactPhone)) errors.push("Contact phone must be 10 digits");
+  if (description && description.length > 300) errors.push("Description max 300 chars");
+  if (user) {
+    if (!user.name) errors.push("User name required");
+    if (!user.email || !validator.isEmail(user.email)) errors.push("User email invalid");
+    if (!user.password || String(user.password).length < 8) errors.push("User password min 8 characters");
+  }
+  if (errors.length) return res.status(400).json({ message: errors.join("; ") });
   const doc = await Sponsor.create({ name, website, description, tier, contactEmail, contactPhone, active });
+  if (user) {
+    const passwordHash = await bcrypt.hash(String(user.password), 12);
+    await SponsorUser.create({ name: user.name, email: user.email, passwordHash, sponsor: doc._id, active: true, tempPasswordPlain: user.password, isTempPassword: true });
+  }
   await AuditLog.create({ actorId: req.admin.sub, actorRole: "SERVER", action: "CreateSponsor", entityType: "Sponsor", entityId: String(doc._id), meta: { name, tier } });
   res.status(201).json({ sponsor: doc });
 });
@@ -231,11 +247,8 @@ router.delete("/sponsors/:id", requireServerAdmin, async (req, res) => {
   const { id } = req.params;
   const doc = await Sponsor.findById(id);
   if (!doc) return res.status(404).json({ message: "Sponsor not found" });
-  try {
-    if (doc.logoPublicId) {
-      await cloudinary.uploader.destroy(doc.logoPublicId);
-    }
-  } catch (_) {}
+  try { if (doc.logoPublicId) await cloudinary.uploader.destroy(doc.logoPublicId); } catch (_) {}
+  await SponsorUser.deleteMany({ sponsor: doc._id });
   await doc.deleteOne();
   await AuditLog.create({ actorId: req.admin.sub, actorRole: "SERVER", action: "DeleteSponsor", entityType: "Sponsor", entityId: id });
   res.json({ ok: true });
@@ -261,3 +274,32 @@ router.post("/sponsors/:id/logo", requireServerAdmin, upload.single("file"), asy
     res.status(500).json({ message: "Upload failed" });
   }
 });
+
+// Update school overview (vision, history, establishmentYear, founders, trustees, photos, alumni, recognitions)
+router.put("/schools/:id/overview", requireServerAdmin, async (req, res) => {
+  const { id } = req.params;
+  const {
+    establishmentYear, vision, history, founders, trustees, photos, alumni, recognitions,
+    name, address, contactEmail, website, about
+  } = req.body || {};
+  const s = await School.findById(id);
+  if (!s) return res.status(404).json({ message: "School not found" });
+  if (name !== undefined) s.name = name;
+  if (address !== undefined) s.address = address;
+  if (contactEmail !== undefined) s.contactEmail = contactEmail;
+  if (website !== undefined) s.website = website;
+  if (about !== undefined) s.about = about;
+  if (establishmentYear !== undefined) s.establishmentYear = Number(establishmentYear) || undefined;
+  if (vision !== undefined) s.vision = vision;
+  if (history !== undefined) s.history = history;
+  if (founders !== undefined) s.founders = Array.isArray(founders) ? founders : [founders].filter(Boolean);
+  if (trustees !== undefined) s.trustees = Array.isArray(trustees) ? trustees : [trustees].filter(Boolean);
+  if (photos !== undefined) s.photos = Array.isArray(photos) ? photos : [photos].filter(Boolean);
+  if (alumni !== undefined) s.alumni = Array.isArray(alumni) ? alumni : [alumni].filter(Boolean);
+  if (recognitions !== undefined) s.recognitions = Array.isArray(recognitions) ? recognitions : [recognitions].filter(Boolean);
+  await s.save();
+  await AuditLog.create({ actorId: req.admin.sub, actorRole: "SERVER", action: "UpdateSchoolOverview", entityType: "School", entityId: String(s._id), meta: { establishmentYear: s.establishmentYear } });
+  res.json({ school: s });
+});
+
+export default router;

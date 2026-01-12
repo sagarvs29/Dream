@@ -25,6 +25,9 @@ const TeacherSchema = new mongoose.Schema({
   address: { type: String },
   dateOfBirth: { type: Date },
   joiningDate: { type: Date, default: Date.now },
+  // Verification
+  backgroundVerified: { type: Boolean, default: false },
+  verificationNotes: { type: String },
   
   // Status and Role
   status: { 
@@ -39,6 +42,8 @@ const TeacherSchema = new mongoose.Schema({
   },
   // Auth & access (for mentor/teacher login)
   passwordHash: { type: String },
+  // Track when password was last changed (for audit/UI)
+  passwordChangedAt: { type: Date },
   auth: {
     username: { type: String }, // unique within a school
   },
@@ -53,6 +58,24 @@ const TeacherSchema = new mongoose.Schema({
   mentorshipAreas: [{ type: String }], // Areas where they provide mentorship
   achievements: [{ type: String }], // Awards, recognitions, etc.
   bio: { type: String, maxlength: 500 }, // Short biography
+  // Payroll
+  salary: {
+    monthlySalary: { type: Number, default: 0 },
+    paidAmount: { type: Number, default: 0 },
+    status: { type: String, enum: ["Pending","Partial","Paid"], default: "Pending" },
+    lastPaymentDate: { type: Date },
+    payments: [
+      {
+        date: { type: Date, default: Date.now },
+        amount: { type: Number, required: true },
+        method: { type: String, enum: ["Cash","UPI","Bank","Cheque","Other"], default: "Cash" },
+        receiptNo: { type: String },
+        notes: { type: String },
+        month: { type: Number }, // 1-12
+        year: { type: Number },
+      }
+    ],
+  },
   
   // Administrative
   addedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" }, // School admin who added this teacher
@@ -68,5 +91,19 @@ TeacherSchema.index({ school: 1, department: 1 }); // Query teachers by departme
 TeacherSchema.index({ school: 1, role: 1 }); // Query by role (mentors, teachers, etc.)
 TeacherSchema.index({ school: 1, "auth.username": 1 }, { unique: true, sparse: true });
 TeacherSchema.index({ active: 1, status: 1 });
+// Text index for search
+TeacherSchema.index({ name: "text", department: "text", designation: "text" });
+
+// Virtual: salaryPendingBalance (monthlySalary*monthsDue - paidAmount) is complex; keep simple pending as monthly - last month payment impact
+TeacherSchema.virtual("salaryPendingBalance").get(function () {
+  const monthly = Number(this?.salary?.monthlySalary || 0);
+  // Not exact arrears calc; shows current month's payable
+  const lastPaid = Number(this?.salary?.paidAmount || 0);
+  const pending = monthly - (lastPaid > monthly ? monthly : lastPaid);
+  return pending < 0 ? 0 : pending;
+});
+
+TeacherSchema.set("toJSON", { virtuals: true });
+TeacherSchema.set("toObject", { virtuals: true });
 
 export default mongoose.model("Teacher", TeacherSchema);
