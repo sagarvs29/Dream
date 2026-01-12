@@ -1,0 +1,14 @@
+# Explicit Nixpacks build plan for Railway (frontend)
+
+[phases.install]
+cmds = [
+  "npm ci"
+]
+
+[phases.build]
+cmds = [
+  "npm run build"
+]
+
+[phases.start]
+cmd = "npm run preview"
