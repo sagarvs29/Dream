@@ -45,25 +45,37 @@ console.log("✅ authRoutes mounted on /api/auth");
 dotenv.config();
 const app = express();
 
-// CORS configuration to support Vite dev servers and optional custom origin
+// CORS configuration to support Vite dev servers and optional custom origin(s)
+// WEB_ORIGIN      - single origin (e.g. https://your-frontend.up.railway.app)
+// WEB_ORIGIN_LIST - comma-separated list of origins
+const extraOrigins = (process.env.WEB_ORIGIN_LIST || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
   "http://127.0.0.1:5173",
   "http://127.0.0.1:5174",
-  process.env.WEB_ORIGIN
-].filter(Boolean);
+  process.env.WEB_ORIGIN,
+  ...extraOrigins,
+]
+  .filter(Boolean)
+  .map((o) => o.replace(/\/$/, ""));
 
 const corsOptions = {
   origin: function (origin, callback) {
     if (!origin) return callback(null, true); // allow curl/postman
     const allowDevTunnel = origin?.includes('.devtunnels.ms');
+    const allowRailway = process.env.ALLOW_RAILWAY_ORIGINS === 'true' && /\.up\.railway\.app$/i.test(() => {
+      try { return new URL(origin).hostname; } catch { return ''; }
+    }());
     // Allow LAN-dev Vite served from 192.168.x.x:5173 (mobile testing)
   const isLanDev192 = /^http:\/\/192\.168\.\d+\.\d+:(5173|5174)$/.test(origin);
   const isLanDev10 = /^http:\/\/10\.\d+\.\d+\.\d+:(5173|5174)$/.test(origin);
   // Support 172.16.0.0 – 172.31.255.255 private range (common hotspot / VM networks)
   const isLanDev172 = /^http:\/\/172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+:(5173|5174)$/.test(origin);
-  if (allowedOrigins.includes(origin) || allowDevTunnel || isLanDev192 || isLanDev10 || isLanDev172) return callback(null, true);
+  if (allowedOrigins.includes(origin) || allowDevTunnel || allowRailway || isLanDev192 || isLanDev10 || isLanDev172) return callback(null, true);
     return callback(new Error("Not allowed by CORS"));
   },
   credentials: true,
