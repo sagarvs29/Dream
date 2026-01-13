@@ -25,7 +25,10 @@ export default function MentorLogin() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${getApiBase()}/mentor/auth/login`, {
+      const base = getApiBase();
+      // Debug aid: log and surface the base being used
+      try { console.debug('Mentor login using API base:', base); } catch (_) {}
+      const res = await fetch(`${base}/mentor/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identifier, password })
@@ -40,7 +43,7 @@ export default function MentorLogin() {
       localStorage.setItem("mentor_name", data?.mentor?.name || "");
       window.location.href = "/mentor";
     } catch (e) {
-      setError(e.message);
+      setError(`${e.message}`);
     } finally {
       setLoading(false);
     }
