@@ -14,9 +14,13 @@ export function getApiBase() {
 
   // Fallbacks (development defaults only)
   if (typeof window !== 'undefined') {
-    const { protocol, hostname } = window.location;
-    // When frontend served from port 5173 (Vite), backend expected on 5000
-    return `${protocol}//${hostname}:5000/api`;
+    const { protocol, hostname, port } = window.location;
+    // Only map :5173/5174 -> :5000 during local dev. In production, don't add a port.
+    if (port === '5173' || port === '5174') {
+      return `${protocol}//${hostname}:5000/api`;
+    }
+    // Safe default: same host without custom port (works if reverse-proxy is present)
+    return `${protocol}//${hostname}/api`;
   }
   return 'http://localhost:5000/api';
 }
