@@ -19,5 +19,8 @@ ENV PORT=3000
 # Expose is optional for Railway; the platform sets PORT
 EXPOSE 3000
 COPY --from=build /app/il/dist ./dist
-# Use shell form so $PORT is expanded, and bind to 0.0.0.0 inside the container
-CMD ["sh", "-c", "serve -s dist -l tcp://0.0.0.0:${PORT}"]
+# Generate runtime env.js with API_BASE_URL if provided, then start the static server
+# Set API_BASE_URL in Railway (frontend service) to your backend public URL, e.g. https://<backend>.railway.app/api
+ENV API_BASE_URL=
+# Use shell form so $PORT and $API_BASE_URL are expanded, and bind to 0.0.0.0 inside the container
+CMD ["sh", "-c", "echo \"window.__ENV__={API_BASE_URL:'${API_BASE_URL}'}\" > dist/env.js && serve -s dist -l tcp://0.0.0.0:${PORT}"]
