@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-
-const API_BASE = import.meta.env?.VITE_API_BASE_URL || "http://localhost:5000/api";
+import { getApiBase } from "../config/api";
 
 export default function MentorLogin() {
   const [identifier, setIdentifier] = useState("");
@@ -26,7 +25,7 @@ export default function MentorLogin() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_BASE}/mentor/auth/login`, {
+      const res = await fetch(`${getApiBase()}/mentor/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identifier, password })

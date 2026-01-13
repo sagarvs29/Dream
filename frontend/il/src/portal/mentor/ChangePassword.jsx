@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import ThemeProvider from "../../components/ui/ThemeProvider";
 import MentorTopBar from "../../components/mentor/MentorTopBar";
 import MentorBottomNav from "../../components/nav/MentorBottomNav";
+import { getApiBase } from "../../config/api";
 
 export default function MentorChangePassword() {
   const token = useMemo(() => (typeof window !== 'undefined' ? localStorage.getItem('mentor_token') : null), []);
@@ -23,8 +24,7 @@ export default function MentorChangePassword() {
     }
     try {
       setLoading(true);
-      const base = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:5000/api';
-      const res = await fetch(`${base}/mentor/auth/change-password`, {
+      const res = await fetch(`${getApiBase()}/mentor/auth/change-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

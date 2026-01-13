@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { getApiBase } from "../../config/api";
 import TopBar from "../student/TopBar";
 import ProfileModal from "../common/ProfileModal";
 
@@ -14,8 +15,7 @@ export default function MentorTopBar() {
     if (!token) return;
     (async () => {
       try {
-        const base = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:5000/api';
-        const r = await fetch(`${base}/mentor/me`, { headers: { Authorization: `Bearer ${token}` } });
+  const r = await fetch(`${getApiBase()}/mentor/me`, { headers: { Authorization: `Bearer ${token}` } });
         if (r.ok) {
           const d = await r.json();
           const m = d?.mentor || {};
