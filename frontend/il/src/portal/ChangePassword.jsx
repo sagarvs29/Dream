@@ -1,6 +1,5 @@
 import React, { useState } from "react";
-
-const API = import.meta.env?.VITE_API_BASE_URL || "http://localhost:5000/api";
+import { apiUrl } from "../config/api";
 
 export default function ChangePassword() {
   const [oldPassword, setOld] = useState("");
@@ -11,7 +10,7 @@ export default function ChangePassword() {
   async function submit(e) {
     e.preventDefault();
     setMsg("");
-    const res = await fetch(`${API}/auth/change-password`, {
+    const res = await fetch(apiUrl("/auth/change-password"), {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ oldPassword, newPassword })
