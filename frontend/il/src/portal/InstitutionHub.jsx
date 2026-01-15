@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import ThemeProvider from "../components/ui/ThemeProvider";
+import { getApiBase } from "../config/api";
 
-const API = import.meta.env?.VITE_API_BASE_URL || "http://localhost:5000/api";
+const API = getApiBase();
 // ------- Mentor Assessments (Quizzes) -------
 function MentorAssessments({ token }) {
   const [cls, setCls] = useState("");

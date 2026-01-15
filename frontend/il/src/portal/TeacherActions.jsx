@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { getApiBase } from "../config/api";
 
-const API = import.meta.env?.VITE_API_BASE_URL || "http://localhost:5000/api";
+const API = getApiBase();
 
 export default function TeacherActions() {
   const { id } = useParams();
