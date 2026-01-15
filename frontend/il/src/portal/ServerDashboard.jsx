@@ -244,7 +244,7 @@ export default function ServerDashboard() {
             className="px-4 py-2 rounded bg-violet-600 hover:bg-violet-500 text-sm"
           >New Sponsor</button>
           <button
-            onClick={()=>{clearAdminTokens();window.location.href='/admin/login';}}
+            onClick={()=>{clearAdminTokens(); try { window.location.href='/'; } catch(_) {} }}
             className="btn-secondary px-4 py-2 rounded text-sm"
           >Logout</button>
         </div>

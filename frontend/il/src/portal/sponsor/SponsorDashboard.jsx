@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { getApiBase } from '../../config/api';
 
 export default function SponsorDashboard() {
   const token = typeof window !== 'undefined' ? localStorage.getItem('SPONSOR_TOKEN') : null;
@@ -13,10 +14,11 @@ export default function SponsorDashboard() {
       try {
         setLoading(true); setError('');
         const h = { Authorization: `Bearer ${token}`, 'Content-Type':'application/json' };
-          const r1 = await fetch((import.meta.env?.VITE_API_BASE_URL || 'http://localhost:5000/api') + '/sponsor/requests', { headers: h });
+        const API = getApiBase();
+        const r1 = await fetch(`${API}/sponsor/requests`, { headers: h });
         const d1 = await r1.json();
         if (r1.ok) setRequests(d1.requests || []); else setError(d1.message || 'Failed to load requests');
-          const r2 = await fetch((import.meta.env?.VITE_API_BASE_URL || 'http://localhost:5000/api') + '/sponsor/sponsorships', { headers: h });
+        const r2 = await fetch(`${API}/sponsor/sponsorships`, { headers: h });
         const d2 = await r2.json();
         if (r2.ok) setActive(d2.sponsorships || []); else setError(prev=> prev || d2.message || 'Failed to load active');
       } catch (e) {
@@ -28,7 +30,8 @@ export default function SponsorDashboard() {
   async function updateStatus(id, status) {
     try {
       const h = { Authorization: `Bearer ${token}`, 'Content-Type':'application/json' };
-      const r = await fetch(`/api/sponsor/sponsorships/${id}/status`, { method:'PATCH', headers: h, body: JSON.stringify({ status, amount: status==='Active' ? 0 : undefined }) });
+      const API = getApiBase();
+      const r = await fetch(`${API}/sponsor/sponsorships/${id}/status`, { method:'PATCH', headers: h, body: JSON.stringify({ status, amount: status==='Active' ? 0 : undefined }) });
       const d = await r.json();
       if (!r.ok) return alert(d.message || 'Update failed');
       setRequests(req => req.filter(x => x._id !== id));
@@ -44,7 +47,7 @@ export default function SponsorDashboard() {
       <div className='max-w-5xl mx-auto px-4 py-8'>
         <div className='flex items-center justify-between mb-6'>
           <h1 className='text-3xl font-bold tracking-tight'>Sponsor Dashboard</h1>
-          <button onClick={()=>{localStorage.removeItem('SPONSOR_TOKEN');window.location.href='/sponsor/login';}} className='px-4 py-2 rounded-lg bg-white/15 hover:bg-white/25'>Logout</button>
+          <button onClick={()=>{ try { localStorage.removeItem('SPONSOR_TOKEN'); window.location.href='/'; } catch(_) {} }} className='px-4 py-2 rounded-lg bg-white/15 hover:bg-white/25'>Logout</button>
         </div>
         {error && <div className='mb-4 bg-rose-500/20 border border-rose-400/40 text-rose-100 px-4 py-3 rounded-xl'>{error}</div>}
 

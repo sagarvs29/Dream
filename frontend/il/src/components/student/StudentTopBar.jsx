@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import TopBar from "./TopBar";
 import ProfileModal from "../common/ProfileModal";
+import { logoutAll } from "../../utils/tokens";
+import { getApiBase } from "../../config/api";
 
 // Student-specific wrapper for TopBar that adds a Logout button and shows the student's name
 export default function StudentTopBar() {
@@ -12,7 +14,7 @@ export default function StudentTopBar() {
     if (!token) return;
     (async () => {
       try {
-        const base = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:5000/api';
+        const base = getApiBase();
         const r = await fetch(`${base}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
         if (r.ok) {
           const d = await r.json();
@@ -22,12 +24,7 @@ export default function StudentTopBar() {
     })();
   }, [token]);
 
-  function logout() {
-    try {
-      localStorage.removeItem('token');
-    } catch (_) {}
-    window.location.href = '/login';
-  }
+  function logout() { logoutAll('/'); }
 
   const initials = (me.name || 'S')
     .split(' ')

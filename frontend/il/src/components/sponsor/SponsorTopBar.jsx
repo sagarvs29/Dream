@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import TopBar from "../student/TopBar";
 import ProfileModal from "../common/ProfileModal";
+import { logoutAll } from "../../utils/tokens";
+import { getApiBase } from "../../config/api";
 
 export default function SponsorTopBar() {
   const [me, setMe] = useState({ name: "", email: "" });
@@ -14,7 +16,7 @@ export default function SponsorTopBar() {
     if (!token) return;
     (async () => {
       try {
-        const base = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:5000/api';
+        const base = getApiBase();
         const r = await fetch(`${base}/sponsor/me`, { headers: { Authorization: `Bearer ${token}` } });
         if (r.ok) {
           const d = await r.json();
@@ -42,13 +44,7 @@ export default function SponsorTopBar() {
     .slice(0,2)
     .toUpperCase();
 
-  function logout() {
-    try {
-      localStorage.removeItem('SPONSOR_TOKEN');
-      localStorage.removeItem('sponsor_name');
-    } catch (_) {}
-    window.location.href = '/sponsor/login';
-  }
+  function logout() { logoutAll('/'); }
 
   const extraRight = (
     <div className="flex items-center gap-2">

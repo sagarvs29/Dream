@@ -30,3 +30,24 @@ export function getStudentToken() {
 export function getGenericToken() {
   return localStorage.getItem("token") || "";
 }
+
+// Clear all known auth tokens/metadata across roles and redirect to welcome
+// Usage: logoutAll('/') or logoutAll('/signup') depending on desired landing page
+export function logoutAll(redirectPath = "/") {
+  try {
+    [
+      "token",
+      "student_token",
+      "adm_token",
+      "ADMIN_TOKEN",
+      "adminToken",
+      "mentor_token",
+      "SPONSOR_TOKEN",
+      "sponsor_token",
+    ].forEach((k) => localStorage.removeItem(k));
+    ["adm_role", "sponsor_name"].forEach((k) => localStorage.removeItem(k));
+  } catch (_) {}
+  try {
+    window.location.href = redirectPath || "/";
+  } catch (_) {}
+}

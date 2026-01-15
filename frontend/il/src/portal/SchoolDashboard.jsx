@@ -256,7 +256,7 @@ export default function SchoolDashboard() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={()=>{ try { window.location.href = '/institution'; } catch(_) {} }} className="px-3 py-2 rounded bg-white/15 hover:bg-white/25" title="Institution">🏫 Institution</button>
-          <button onClick={()=>{localStorage.removeItem("adm_token");localStorage.removeItem("adm_role");window.location.href='/admin/login';}} className="btn-secondary px-3 py-2 rounded">Logout</button>
+          <button onClick={()=>{ try { localStorage.removeItem("adm_token"); localStorage.removeItem("adm_role"); window.location.href='/'; } catch(_) {} }} className="btn-secondary px-3 py-2 rounded">Logout</button>
         </div>
       </div>
 
