@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-
-const API = import.meta.env?.VITE_API_BASE_URL || "http://localhost:5000/api";
+import { apiUrl } from "../config/api";
 
 export default function SchoolAdminLogin() {
   const [email, setEmail] = useState("");
@@ -19,7 +18,7 @@ export default function SchoolAdminLogin() {
     setMsg("");
     setLoading(true);
     try {
-      const res = await fetch(`${API}/auth/school/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) });
+      const res = await fetch(apiUrl("/auth/school/login"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message || "Login failed");
       localStorage.setItem("adm_token", data.token);
