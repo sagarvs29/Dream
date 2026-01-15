@@ -80,7 +80,8 @@ const corsOptions = {
     const allowDevTunnel = normalizedOrigin.includes('.devtunnels.ms');
     let originHost = '';
     try { originHost = new URL(normalizedOrigin).hostname; } catch { originHost = ''; }
-    const allowRailway = process.env.ALLOW_RAILWAY_ORIGINS === 'true' && /\.up\.railway\.app$/i.test(originHost);
+    // Be permissive with Railway origins to avoid preflight failures between services
+    const allowRailway = /\.up\.railway\.app$/i.test(originHost) || process.env.ALLOW_RAILWAY_ORIGINS === 'true';
     // Allow LAN-dev Vite served from 192.168.x.x:5173 (mobile testing)
     const isLanDev192 = /^http:\/\/192\.168\.\d+\.\d+:(5173|5174)$/.test(normalizedOrigin);
     const isLanDev10 = /^http:\/\/10\.\d+\.\d+\.\d+:(5173|5174)$/.test(normalizedOrigin);
@@ -103,7 +104,10 @@ app.use((req, res, next) => {
   const isLanDev192 = typeof origin === 'string' && /^http:\/\/192\.168\.\d+\.\d+:(5173|5174)$/.test(origin);
   const isLanDev10 = typeof origin === 'string' && /^http:\/\/10\.\d+\.\d+\.\d+:(5173|5174)$/.test(origin);
   const isLanDev172 = typeof origin === 'string' && /^http:\/\/172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+:(5173|5174)$/.test(origin);
-  if (origin && (allowedOrigins.includes(origin) || allowDevTunnel || isLanDev192 || isLanDev10 || isLanDev172)) {
+  let originHost2 = '';
+  try { originHost2 = new URL(origin || '').hostname; } catch { originHost2 = ''; }
+  const isRailway = /\.up\.railway\.app$/i.test(originHost2);
+  if (origin && (allowedOrigins.includes((origin || '').replace(/\/$/, '')) || allowDevTunnel || isRailway || isLanDev192 || isLanDev10 || isLanDev172)) {
     res.header("Access-Control-Allow-Origin", origin);
     res.header("Vary", "Origin");
     res.header("Access-Control-Allow-Credentials", "true");
