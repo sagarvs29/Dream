@@ -51,6 +51,8 @@ const missingEnv = REQUIRED_ENV.filter((k) => !process.env[k] || String(process.
 if (missingEnv.length) {
   console.error(`Missing required env: ${missingEnv.join(", ")}`);
   console.error("Set these in Railway -> Backend service -> Variables (see backend/.env.example).");
+  // Abort startup so clients don't hit partially configured server
+  process.exit(1);
 }
 
 // CORS configuration to support Vite dev servers and optional custom origin(s)

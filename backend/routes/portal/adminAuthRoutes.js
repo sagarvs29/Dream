@@ -14,10 +14,12 @@ router.post("/server/login", async (req, res) => {
     if (!admin) return res.status(404).json({ message: "Admin not found" });
     const ok = await bcrypt.compare(password, admin.passwordHash);
     if (!ok) return res.status(401).json({ message: "Invalid credentials" });
-    admin.lastLoginAt = new Date();
-    await admin.save();
-    const exp = process.env.JWT_EXPIRES_IN || "7d";
-    const token = jwt.sign({ sub: String(admin._id), role: "SERVER" }, process.env.JWT_SECRET, { expiresIn: exp });
+  admin.lastLoginAt = new Date();
+  await admin.save();
+  const exp = process.env.JWT_EXPIRES_IN || "7d";
+  const secret = process.env.JWT_SECRET;
+  if (!secret) return res.status(500).json({ message: "JWT secret not configured on server" });
+  const token = jwt.sign({ sub: String(admin._id), role: "SERVER" }, secret, { expiresIn: exp });
     res.json({ token, admin: { id: admin._id, name: admin.name, role: admin.role } });
   } catch (e) {
     res.status(500).json({ message: e?.message || "Login failed" });
@@ -32,10 +34,12 @@ router.post("/school/login", async (req, res) => {
     if (!admin) return res.status(404).json({ message: "Admin not found" });
     const ok = await bcrypt.compare(password, admin.passwordHash);
     if (!ok) return res.status(401).json({ message: "Invalid credentials" });
-    admin.lastLoginAt = new Date();
-    await admin.save();
-    const exp = process.env.JWT_EXPIRES_IN || "7d";
-    const token = jwt.sign({ sub: String(admin._id), role: "SCHOOL", schoolId: String(admin.school?._id) }, process.env.JWT_SECRET, { expiresIn: exp });
+  admin.lastLoginAt = new Date();
+  await admin.save();
+  const exp = process.env.JWT_EXPIRES_IN || "7d";
+  const secret = process.env.JWT_SECRET;
+  if (!secret) return res.status(500).json({ message: "JWT secret not configured on server" });
+  const token = jwt.sign({ sub: String(admin._id), role: "SCHOOL", schoolId: String(admin.school?._id) }, secret, { expiresIn: exp });
     res.json({ token, admin: { id: admin._id, name: admin.name, role: admin.role, school: admin.school }, isTempPassword: admin.isTempPassword });
   } catch (e) {
     res.status(500).json({ message: e?.message || "Login failed" });
