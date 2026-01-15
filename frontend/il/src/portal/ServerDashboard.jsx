@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { getAdminToken, clearAdminTokens } from "../utils/tokens";
+import { getAdminToken, logoutAll } from "../utils/tokens";
 import { useNavigate } from "react-router-dom";
 import { apiUrl } from "../config/api.js";
 
@@ -244,7 +244,7 @@ export default function ServerDashboard() {
             className="px-4 py-2 rounded bg-violet-600 hover:bg-violet-500 text-sm"
           >New Sponsor</button>
           <button
-            onClick={()=>{clearAdminTokens(); try { window.location.href='/'; } catch(_) {} }}
+            onClick={()=>{ logoutAll('/'); }}
             className="btn-secondary px-4 py-2 rounded text-sm"
           >Logout</button>
         </div>

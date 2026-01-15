@@ -48,6 +48,11 @@ export function logoutAll(redirectPath = "/") {
     ["adm_role", "sponsor_name"].forEach((k) => localStorage.removeItem(k));
   } catch (_) {}
   try {
-    window.location.href = redirectPath || "/";
+    // Replace history entry so back button doesn't return to the protected page
+    if (typeof window !== 'undefined' && window.location && typeof window.location.replace === 'function') {
+      window.location.replace(redirectPath || "/");
+    } else {
+      window.location.href = redirectPath || "/";
+    }
   } catch (_) {}
 }

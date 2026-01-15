@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getApiBase } from '../../config/api';
+import { logoutAll } from '../../utils/tokens';
 
 export default function SponsorDashboard() {
   const token = typeof window !== 'undefined' ? localStorage.getItem('SPONSOR_TOKEN') : null;
@@ -47,7 +48,7 @@ export default function SponsorDashboard() {
       <div className='max-w-5xl mx-auto px-4 py-8'>
         <div className='flex items-center justify-between mb-6'>
           <h1 className='text-3xl font-bold tracking-tight'>Sponsor Dashboard</h1>
-          <button onClick={()=>{ try { localStorage.removeItem('SPONSOR_TOKEN'); window.location.href='/'; } catch(_) {} }} className='px-4 py-2 rounded-lg bg-white/15 hover:bg-white/25'>Logout</button>
+          <button onClick={()=> logoutAll('/') } className='px-4 py-2 rounded-lg bg-white/15 hover:bg-white/25'>Logout</button>
         </div>
         {error && <div className='mb-4 bg-rose-500/20 border border-rose-400/40 text-rose-100 px-4 py-3 rounded-xl'>{error}</div>}
 
