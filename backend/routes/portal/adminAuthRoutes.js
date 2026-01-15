@@ -8,28 +8,38 @@ const router = express.Router();
 
 // Server admin login
 router.post("/server/login", async (req, res) => {
-  const { email, password } = req.body || {};
-  const admin = await Admin.findOne({ email, role: "SERVER" });
-  if (!admin) return res.status(404).json({ message: "Admin not found" });
-  const ok = await bcrypt.compare(password, admin.passwordHash);
-  if (!ok) return res.status(401).json({ message: "Invalid credentials" });
-  admin.lastLoginAt = new Date();
-  await admin.save();
-  const token = jwt.sign({ sub: String(admin._id), role: "SERVER" }, process.env.JWT_SECRET, { expiresIn: "7d" });
-  res.json({ token, admin: { id: admin._id, name: admin.name, role: admin.role } });
+  try {
+    const { email, password } = req.body || {};
+    const admin = await Admin.findOne({ email, role: "SERVER" });
+    if (!admin) return res.status(404).json({ message: "Admin not found" });
+    const ok = await bcrypt.compare(password, admin.passwordHash);
+    if (!ok) return res.status(401).json({ message: "Invalid credentials" });
+    admin.lastLoginAt = new Date();
+    await admin.save();
+    const exp = process.env.JWT_EXPIRES_IN || "7d";
+    const token = jwt.sign({ sub: String(admin._id), role: "SERVER" }, process.env.JWT_SECRET, { expiresIn: exp });
+    res.json({ token, admin: { id: admin._id, name: admin.name, role: admin.role } });
+  } catch (e) {
+    res.status(500).json({ message: e?.message || "Login failed" });
+  }
 });
 
 // School admin login
 router.post("/school/login", async (req, res) => {
-  const { email, password } = req.body || {};
-  const admin = await Admin.findOne({ email, role: "SCHOOL" }).populate("school");
-  if (!admin) return res.status(404).json({ message: "Admin not found" });
-  const ok = await bcrypt.compare(password, admin.passwordHash);
-  if (!ok) return res.status(401).json({ message: "Invalid credentials" });
-  admin.lastLoginAt = new Date();
-  await admin.save();
-  const token = jwt.sign({ sub: String(admin._id), role: "SCHOOL", schoolId: String(admin.school?._id) }, process.env.JWT_SECRET, { expiresIn: "7d" });
-  res.json({ token, admin: { id: admin._id, name: admin.name, role: admin.role, school: admin.school }, isTempPassword: admin.isTempPassword });
+  try {
+    const { email, password } = req.body || {};
+    const admin = await Admin.findOne({ email, role: "SCHOOL" }).populate("school");
+    if (!admin) return res.status(404).json({ message: "Admin not found" });
+    const ok = await bcrypt.compare(password, admin.passwordHash);
+    if (!ok) return res.status(401).json({ message: "Invalid credentials" });
+    admin.lastLoginAt = new Date();
+    await admin.save();
+    const exp = process.env.JWT_EXPIRES_IN || "7d";
+    const token = jwt.sign({ sub: String(admin._id), role: "SCHOOL", schoolId: String(admin.school?._id) }, process.env.JWT_SECRET, { expiresIn: exp });
+    res.json({ token, admin: { id: admin._id, name: admin.name, role: admin.role, school: admin.school }, isTempPassword: admin.isTempPassword });
+  } catch (e) {
+    res.status(500).json({ message: e?.message || "Login failed" });
+  }
 });
 
 // Change password (any admin)

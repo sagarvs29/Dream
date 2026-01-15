@@ -45,6 +45,14 @@ console.log("✅ authRoutes mounted on /api/auth");
 dotenv.config();
 const app = express();
 
+// Validate essential env so we don't crash mid-request and return HTML error pages
+const REQUIRED_ENV = ["MONGO_URI", "JWT_SECRET"]; // JWT_EXPIRES_IN is optional
+const missingEnv = REQUIRED_ENV.filter((k) => !process.env[k] || String(process.env[k]).trim() === "");
+if (missingEnv.length) {
+  console.error(`Missing required env: ${missingEnv.join(", ")}`);
+  console.error("Set these in Railway -> Backend service -> Variables (see backend/.env.example).");
+}
+
 // CORS configuration to support Vite dev servers and optional custom origin(s)
 // WEB_ORIGIN      - single origin (e.g. https://your-frontend.up.railway.app)
 // WEB_ORIGIN_LIST - comma-separated list of origins
@@ -144,7 +152,7 @@ app.use("/api/auth", adminAuthRoutes);
 app.use("/api/server", serverAdminRoutes);
 app.use("/api/school", schoolAdminRoutes);
 
-app.get("/api/health", (req, res) => res.json({ ok: true }));
+app.get("/api/health", (req, res) => res.json({ ok: true, env: { jwt: !!process.env.JWT_SECRET, mongo: !!process.env.MONGO_URI } }));
 
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
@@ -230,3 +238,16 @@ mongoose.connect(process.env.MONGO_URI)
   .catch(err => {
     console.error("MongoDB connection error:", err.message);
   });
+
+// Global JSON error handler to avoid sending HTML error pages to the frontend
+// Keep this after route registrations
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  const status = err?.status || 500;
+  const message = err?.message || "Internal Server Error";
+  const payload = { error: message };
+  if (process.env.NODE_ENV !== "production" && err?.stack) {
+    payload.stack = err.stack;
+  }
+  res.status(status).json(payload);
+});

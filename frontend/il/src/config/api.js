@@ -5,12 +5,22 @@
 export function getApiBase() {
   // Prefer runtime-injected value from env.js (works with static hosting/Docker)
   if (typeof window !== 'undefined' && window.__ENV__?.API_BASE_URL) {
-    return String(window.__ENV__.API_BASE_URL).replace(/\/$/, '');
+    const base = String(window.__ENV__.API_BASE_URL).replace(/\/$/, '');
+    if (import.meta.env?.MODE !== 'development') {
+      console.debug('[api] using runtime API_BASE_URL:', base);
+    }
+    return base;
   }
 
   // Then Vite build-time variable
   const envBase = import.meta.env?.VITE_API_BASE_URL;
-  if (envBase) return envBase.replace(/\/$/, '');
+  if (envBase) {
+    const base = envBase.replace(/\/$/, '');
+    if (import.meta.env?.MODE !== 'development') {
+      console.debug('[api] using VITE_API_BASE_URL:', base);
+    }
+    return base;
+  }
 
   // Fallbacks (development defaults only)
   if (typeof window !== 'undefined') {
@@ -20,7 +30,11 @@ export function getApiBase() {
       return `${protocol}//${hostname}:5000/api`;
     }
     // Safe default: same host without custom port (works if reverse-proxy is present)
-    return `${protocol}//${hostname}/api`;
+    const fallback = `${protocol}//${hostname}/api`;
+    if (import.meta.env?.MODE !== 'development') {
+      console.warn('[api] using same-host fallback base:', fallback);
+    }
+    return fallback;
   }
   return 'http://localhost:5000/api';
 }
